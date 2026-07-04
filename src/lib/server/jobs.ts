@@ -115,6 +115,18 @@ export async function fetchOverviewData(): Promise<OverviewData> {
 	const lineupView = upcomingLineup?.riders?.length ? describeLineup(upcomingLineup) : null;
 	const mappedLineup = lineupView ? mapLineupView(lineupView) : null;
 
+	const rawRanking = overview.gameStatus?.ranking ?? overview.personalRanking ?? null;
+	const lastMatch = overview.gameStatus?.lastMatch ?? null;
+	const ranking = rawRanking
+		? {
+				rank: rawRanking.rank ?? null,
+				amountOfPlayers: rawRanking.amountOfPlayers ?? null,
+				overallScore: rawRanking.overallScore ?? null,
+				lastMatchScore: lastMatch?.matchScore ?? null,
+				lastMatchName: lastMatch?.match?.name ?? null
+			}
+		: null;
+
 	const base: Omit<OverviewData, 'ui' | 'auth'> = {
 		edition: overview.edition,
 		gameStatus: overview.gameStatus,
@@ -122,7 +134,8 @@ export async function fetchOverviewData(): Promise<OverviewData> {
 		upcomingMatch: enriched,
 		upcomingLineup: mappedLineup,
 		rosterPreview: mapRosterView(roster),
-		transferState
+		transferState,
+		ranking
 	};
 
 	return {

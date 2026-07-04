@@ -7,6 +7,8 @@
 	import LogPanel from '$lib/components/LogPanel.svelte';
 	import DecisionHistory from '$lib/components/DecisionHistory.svelte';
 	import SimulatePreview from '$lib/components/SimulatePreview.svelte';
+	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
+	import { askConfirm, closeConfirm, createConfirmDialogState } from '$lib/confirm-dialog';
 	import { dashboardFetch, dashboardLogsUrl } from '$lib/dashboard-api';
 	import type { OverviewData } from '$lib/types/overview';
 	import type { ManagePreviewView, PreviewSubmitPayload, RosterPreviewView } from '$lib/types/preview';
@@ -35,6 +37,7 @@
 	let submitBusy = $state(false);
 	let logPanel: LogPanelComponent | undefined = $state();
 	let decisionHistory: DecisionHistoryComponent | undefined = $state();
+	let confirmDialog = $state(createConfirmDialogState());
 
 	const dashboardKey = $derived(data.dashboardKey);
 	const logsUrl = $derived(dashboardLogsUrl(dashboardKey));
@@ -113,12 +116,19 @@
 	async function submitPreview() {
 		if (!submitPayload) return;
 
-		const label =
+		const title =
 			submitPayload.kind === 'roster'
-				? 'Dit ploegvoorstel indienen bij Sporza?'
-				: `Dit lineup-voorstel indienen voor ${submitPayload.matchName ?? 'deze rit'}?`;
+				? 'Ploegvoorstel indienen'
+				: 'Lineup-voorstel indienen';
 
-		if (!confirm(label)) return;
+		const description =
+			submitPayload.kind === 'roster'
+				? 'Dit AI-ploegvoorstel wordt ingediend bij Sporza.'
+				: `Dit lineup-voorstel wordt ingediend voor ${submitPayload.matchName ?? 'deze rit'}.${submitPayload.summary ? `\n\n${submitPayload.summary}` : ''}`;
+
+		if (!(await askConfirm(confirmDialog, { title, description, confirmLabel: 'Indienen bij Sporza' }))) {
+			return;
+		}
 
 		submitBusy = true;
 		try {
@@ -147,7 +157,13 @@
 		if (!matchId) return;
 
 		if (!dryRun) {
-			if (!confirm('Direct indienen bij Sporza zonder preview?')) return;
+			const confirmed = await askConfirm(confirmDialog, {
+				title: 'Direct indienen',
+				description:
+					'AI draait opnieuw en dient meteen in bij Sporza — zonder preview of diff. Weet je het zeker?',
+				confirmLabel: 'Direct indienen'
+			});
+			if (!confirmed) return;
 		}
 
 		jobBusy = true;
@@ -172,7 +188,15 @@
 	}
 
 	async function runRoster(dryRun: boolean) {
-		if (!dryRun && !confirm('Direct indienen bij Sporza zonder preview?')) return;
+		if (!dryRun) {
+			const confirmed = await askConfirm(confirmDialog, {
+				title: 'Direct indienen',
+				description:
+					'AI stelt een nieuwe ploeg samen en dient meteen in bij Sporza — zonder preview. Weet je het zeker?',
+				confirmLabel: 'Direct indienen'
+			});
+			if (!confirmed) return;
+		}
 
 		jobBusy = true;
 		jobBusyLabel = dryRun ? 'AI-voorstel maken…' : 'Direct indienen bij Sporza…';
@@ -304,3 +328,14 @@
 		<DecisionHistory bind:this={decisionHistory} {dashboardKey} />
 	</aside>
 </div>
+
+<ConfirmModal
+	open={confirmDialog.open}
+	title={confirmDialog.title}
+	description={confirmDialog.description}
+	confirmLabel={confirmDialog.confirmLabel}
+	cancelLabel={confirmDialog.cancelLabel}
+	busy={confirmDialog.busy}
+	onconfirm={() => closeConfirm(confirmDialog, true)}
+	oncancel={() => closeConfirm(confirmDialog, false)}
+/>

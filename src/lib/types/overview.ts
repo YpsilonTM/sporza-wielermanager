@@ -50,6 +50,14 @@ export interface AuthStatusView {
 	canRefresh: boolean;
 }
 
+export interface RankingView {
+	rank: number | null;
+	amountOfPlayers: number | null;
+	overallScore: number | null;
+	lastMatchScore: number | null;
+	lastMatchName: string | null;
+}
+
 export type OverviewPhase =
 	| 'build_squad'
 	| 'pre_race'
@@ -89,6 +97,7 @@ export interface OverviewData {
 	upcomingLineup: LineupView | null;
 	rosterPreview: RosterRiderView[];
 	transferState: TransferStateView | null;
+	ranking: RankingView | null;
 	auth: AuthStatusView;
 	ui: OverviewUiState;
 }

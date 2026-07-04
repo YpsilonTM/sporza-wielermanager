@@ -6,6 +6,7 @@
 
 	const gs = $derived(overview?.gameStatus);
 	const ui = $derived(overview?.ui);
+	const ranking = $derived(overview?.ranking);
 	const rosterPreview = $derived(overview?.rosterPreview ?? []);
 </script>
 
@@ -52,6 +53,32 @@
 				{/if}
 			</p>
 		</div>
+		{#if ranking?.rank != null}
+			<div>
+				<p class="text-[0.68rem] font-semibold uppercase tracking-wider text-slate-500">Stand</p>
+				<p class="text-sm font-semibold text-slate-100">
+					#{ranking.rank}
+					{#if ranking.amountOfPlayers != null}
+						<span class="text-slate-400">/ {ranking.amountOfPlayers}</span>
+					{/if}
+				</p>
+			</div>
+		{/if}
+		{#if ranking?.overallScore != null}
+			<div>
+				<p class="text-[0.68rem] font-semibold uppercase tracking-wider text-slate-500">Punten</p>
+				<p class="text-sm font-semibold text-slate-100">{ranking.overallScore}</p>
+			</div>
+		{/if}
+		{#if ranking?.lastMatchScore != null}
+			<div>
+				<p class="text-[0.68rem] font-semibold uppercase tracking-wider text-slate-500">Vorige rit</p>
+				<p class="text-sm font-semibold text-emerald-300">+{ranking.lastMatchScore} pt</p>
+				{#if ranking.lastMatchName}
+					<p class="text-[0.65rem] text-slate-500">{ranking.lastMatchName}</p>
+				{/if}
+			</div>
+		{/if}
 	</div>
 
 	{#if rosterPreview.length > 0}
