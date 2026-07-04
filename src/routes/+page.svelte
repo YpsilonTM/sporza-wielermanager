@@ -48,10 +48,7 @@
 	function handleManageFailed(data: Extract<SseEvent, { type: 'manage-failed' }>) {
 		jobBusy = false;
 		jobBusyLabel = '';
-		logPanel?.addLog(
-			`❌ Mislukt${data.reason ? `: ${data.reason}` : ''}`,
-			30
-		);
+		logPanel?.addLog(`❌ Mislukt${data.reason ? `: ${data.reason}` : ''}`, 30);
 	}
 
 	function applyRoster(data: Extract<SseEvent, { type: 'roster' }>) {
@@ -85,10 +82,7 @@
 		} catch (err) {
 			jobBusy = false;
 			jobBusyLabel = '';
-			logPanel?.addLog(
-				`❌ ${err instanceof Error ? err.message : 'Onbekende fout'}`,
-				30
-			);
+			logPanel?.addLog(`❌ ${err instanceof Error ? err.message : 'Onbekende fout'}`, 30);
 		}
 	}
 
@@ -110,10 +104,7 @@
 		} catch (err) {
 			jobBusy = false;
 			jobBusyLabel = '';
-			logPanel?.addLog(
-				`❌ ${err instanceof Error ? err.message : 'Onbekende fout'}`,
-				30
-			);
+			logPanel?.addLog(`❌ ${err instanceof Error ? err.message : 'Onbekende fout'}`, 30);
 		}
 	}
 
@@ -148,25 +139,25 @@
 	});
 </script>
 
-<header class="page-header">
+<header class="mb-6 flex flex-wrap items-start justify-between gap-4">
 	<div>
-		<h1>🚴 Sporza Wielermanager</h1>
-		<p class="subtitle">
+		<h1 class="text-2xl font-bold tracking-tight text-white">🚴 Sporza Wielermanager</h1>
+		<p class="mt-1 text-sm text-slate-400">
 			Auto-manage {Math.round(AUTO_MANAGE_WINDOW_MS / 60_000)} min voor elke deadline
 		</p>
 	</div>
-	<div class="header-actions">
-		<button class="btn-secondary btn-sm" type="button" disabled={authBusy} onclick={triggerAuthRefresh}>
+	<div class="flex items-center gap-3">
+		<button class="btn-secondary" type="button" disabled={authBusy} onclick={triggerAuthRefresh}>
 			🔑 Auth
 		</button>
-		<span class="status">{connectionStatus}</span>
+		<span class="text-xs text-slate-500">{connectionStatus}</span>
 	</div>
 </header>
 
 {#if overviewLoading && !overview}
-	<p class="status">Laden…</p>
+	<p class="text-sm text-slate-400">Laden…</p>
 {:else if overviewError}
-	<p class="status error-text">{overviewError}</p>
+	<p class="text-sm text-red-400">{overviewError}</p>
 {:else if overview?.ui}
 	<StatusBar {overview} />
 	<WorkflowBar ui={overview.ui} />
@@ -181,29 +172,38 @@
 	onOverviewRefresh={loadOverview}
 />
 
-<div class="dashboard-layout">
-	<div class="dashboard-main">
+<div class="grid items-start gap-5 lg:grid-cols-[1fr_320px]">
+	<div class="min-w-0 space-y-4">
 		<StagePanel stage={overview?.upcomingMatch ?? null} lineup={overview?.upcomingLineup ?? null} />
 
 		{#if previewSummary || previewReasoning}
-			<details class="match-analysis-panel preview-panel" open>
-				<summary class="match-analysis-summary">
-					<span class="match-analysis-summary-label">Laatste AI-resultaat</span>
-					<span class="match-analysis-preview">{previewSummary}</span>
+			<details class="card group" open>
+				<summary class="cursor-pointer list-none">
+					<div class="flex items-start justify-between gap-3">
+						<div class="min-w-0">
+							<p class="text-xs font-semibold uppercase tracking-wider text-emerald-400">
+								Laatste AI-resultaat
+							</p>
+							{#if previewSummary}
+								<p class="mt-1 line-clamp-2 text-sm text-slate-400">{previewSummary}</p>
+							{/if}
+						</div>
+						<span class="text-xs text-slate-500 transition group-open:rotate-180">▼</span>
+					</div>
 				</summary>
-				<div class="match-analysis-body">
+				<div class="mt-3 space-y-2 border-t border-slate-700/80 pt-3 text-sm text-slate-400">
 					{#if previewSummary}
-						<div class="match-reasoning"><strong>Samenvatting:</strong> {previewSummary}</div>
+						<p><span class="font-semibold text-slate-300">Samenvatting:</span> {previewSummary}</p>
 					{/if}
 					{#if previewReasoning}
-						<div class="match-reasoning"><strong>Reden:</strong> {previewReasoning}</div>
+						<p><span class="font-semibold text-slate-300">Reden:</span> {previewReasoning}</p>
 					{/if}
 				</div>
 			</details>
 		{/if}
 	</div>
 
-	<aside class="dashboard-aside">
+	<aside>
 		{#if overview?.ui}
 			<ActionBar
 				ui={overview.ui}

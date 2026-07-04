@@ -8,37 +8,37 @@
 </script>
 
 {#if overview && ui}
-	<div class="stats-bar compact">
-		<div class="stat-item">
-			<span class="stat-label">Speler</span>
-			<span class="stat-value">{gs?.user?.name ?? '—'}</span>
+	<div class="card mb-4 flex flex-wrap gap-x-6 gap-y-3">
+		<div>
+			<p class="text-[0.68rem] font-semibold uppercase tracking-wider text-slate-500">Speler</p>
+			<p class="text-sm font-semibold text-slate-100">{gs?.user?.name ?? '—'}</p>
 		</div>
-		<div class="stat-item">
-			<span class="stat-label">Ploeg</span>
-			<span class="stat-value">
+		<div>
+			<p class="text-[0.68rem] font-semibold uppercase tracking-wider text-slate-500">Ploeg</p>
+			<p class="text-sm font-semibold text-slate-100">
 				{ui.rosterCount}/{ui.squadSize}
 				{#if ui.rosterComplete}
-					<span class="badge ok">compleet</span>
+					<span class="badge-ok">compleet</span>
 				{:else}
-					<span class="badge warn">onvolledig</span>
+					<span class="badge-warn">onvolledig</span>
 				{/if}
-			</span>
+			</p>
 		</div>
 		{#if overview.transferState}
-			<div class="stat-item">
-				<span class="stat-label">Budget</span>
-				<span class="stat-value">€{overview.transferState.remainingBudget}M</span>
+			<div>
+				<p class="text-[0.68rem] font-semibold uppercase tracking-wider text-slate-500">Budget</p>
+				<p class="text-sm font-semibold text-slate-100">€{overview.transferState.remainingBudget}M</p>
 			</div>
 		{/if}
-		<div class="stat-item">
-			<span class="stat-label">Lineup</span>
-			<span class="stat-value">
+		<div>
+			<p class="text-[0.68rem] font-semibold uppercase tracking-wider text-slate-500">Lineup</p>
+			<p class="text-sm font-semibold text-slate-100">
 				{#if ui.lineupSubmitted}
-					<span class="badge ok">ingediend</span>
+					<span class="badge-ok">ingediend</span>
 				{:else}
-					<span class="badge warn">open</span>
+					<span class="badge-warn">open</span>
 				{/if}
-			</span>
+			</p>
 		</div>
 	</div>
 {/if}

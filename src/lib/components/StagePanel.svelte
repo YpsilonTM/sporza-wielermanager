@@ -40,49 +40,71 @@
 </script>
 
 {#if stage}
-	<section class="stage-hero">
-		<div class="stage-hero-main">
-			<p class="stage-kicker">Volgende rit</p>
-			<h2 class="stage-title">{stage.name}</h2>
-			<p class="stage-meta">
+	<section
+		class="card mb-4 flex flex-col justify-between gap-4 bg-gradient-to-br from-slate-900 to-slate-950 sm:flex-row sm:items-start"
+	>
+		<div class="min-w-0">
+			<p class="mb-1 text-[0.68rem] font-semibold uppercase tracking-wider text-slate-500">
+				Volgende rit
+			</p>
+			<h2 class="text-xl font-bold leading-tight text-white">{stage.name}</h2>
+			<p class="mt-1 text-sm text-slate-400">
 				{stage.terrainType ?? '—'} · {stage.matchType ?? 'rit'} · deadline {deadlineLabel}
 			</p>
 		</div>
-		<div class="stage-hero-aside">
-			<span class="countdown-pill">{formatCountdown(stage.minutesUntilDeadline)}</span>
+		<div class="flex shrink-0 flex-col items-start gap-2 sm:items-end">
+			<span class="text-2xl font-bold tabular-nums text-amber-400">
+				{formatCountdown(stage.minutesUntilDeadline)}
+			</span>
 			{#if stage.autoManageScheduled}
-				<span class="chip chip-auto">Auto ~{formatCountdown(stage.minutesUntilDeadline)}</span>
+				<span class="chip chip-auto">Auto gepland</span>
 			{/if}
 		</div>
 	</section>
 {/if}
 
 {#if lineup?.submitted}
-	<section class="lineup-panel">
-		<div class="lineup-panel-header">
-			<h3>Ingediende lineup</h3>
+	<section class="card">
+		<div class="mb-4 flex flex-wrap items-center justify-between gap-2">
+			<h3 class="text-base font-semibold text-slate-100">Ingediende lineup</h3>
 			<span class="chip chip-done">Actief bij Sporza</span>
 		</div>
-		<div class="lineup-columns">
-			<div class="lineup-column">
-				<h4>Starters ({lineup.starters.length})</h4>
-				<ul class="rider-list">
+		<div class="grid gap-4 sm:grid-cols-2">
+			<div>
+				<h4 class="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+					Starters ({lineup.starters.length})
+				</h4>
+				<ul class="space-y-1.5">
 					{#each lineup.starters as rider (rider.id)}
-						<li class="rider-row" class:captain={rider.role === 'CAPTAIN'}>
-							<span class="rider-name">{rider.name}</span>
-							<span class="rider-role">{roleLabel(rider.role)}</span>
+						<li
+							class="flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm
+								{rider.role === 'CAPTAIN'
+								? 'border-emerald-600/60 bg-emerald-950/40'
+								: 'border-slate-700 bg-slate-950/60'}"
+						>
+							<span class="font-medium text-slate-100">{rider.name}</span>
+							<span
+								class="text-xs font-semibold
+									{rider.role === 'CAPTAIN' ? 'text-emerald-300' : 'text-slate-400'}"
+							>
+								{roleLabel(rider.role)}
+							</span>
 						</li>
 					{/each}
 				</ul>
 			</div>
 			{#if lineup.bench.length > 0}
-				<div class="lineup-column">
-					<h4>Bank ({lineup.bench.length})</h4>
-					<ul class="rider-list">
+				<div>
+					<h4 class="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+						Bank ({lineup.bench.length})
+					</h4>
+					<ul class="space-y-1.5">
 						{#each lineup.bench as rider (rider.id)}
-							<li class="rider-row">
-								<span class="rider-name">{rider.name}</span>
-								<span class="rider-role muted">Bank</span>
+							<li
+								class="flex items-center justify-between gap-2 rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2 text-sm"
+							>
+								<span class="font-medium text-slate-300">{rider.name}</span>
+								<span class="text-xs font-semibold text-slate-500">Bank</span>
 							</li>
 						{/each}
 					</ul>
@@ -91,8 +113,8 @@
 		</div>
 	</section>
 {:else if stage}
-	<section class="lineup-panel empty">
-		<h3>Lineup</h3>
-		<p>Nog geen lineup ingediend voor deze rit.</p>
+	<section class="card border-dashed">
+		<h3 class="text-base font-semibold text-slate-100">Lineup</h3>
+		<p class="mt-1 text-sm text-slate-400">Nog geen lineup ingediend voor deze rit.</p>
 	</section>
 {/if}
