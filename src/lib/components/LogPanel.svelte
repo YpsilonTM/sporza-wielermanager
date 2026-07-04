@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import type { SseEvent } from '$lib/types/sse';
 
 	const BACKGROUND_NOISE_PATTERNS = [
@@ -67,7 +68,7 @@
 		lines.filter((line) => !(hideBackgroundNoise && line.backgroundNoise)).length
 	);
 
-	$effect(() => {
+	onMount(() => {
 		const es = new EventSource('/api/logs');
 
 		es.onopen = () => {
