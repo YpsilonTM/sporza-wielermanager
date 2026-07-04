@@ -1,5 +1,5 @@
 import { performBrowserLogin } from "./auth-playwright.mjs";
-import { formatAuthLoginError } from "./auth-errors.js";
+import { formatAuthLoginError } from "../src/lib/server/auth-errors.js";
 
 function parseSettings() {
   const raw = process.env.SWM_SETTINGS_JSON || "";

@@ -30,7 +30,36 @@ export function areTransfersOpen(gameStatus, edition) {
   return upcoming.status !== "NOT_STARTED";
 }
 
+/** True while rit 1 has not started — unlimited free squad edits via saveRoster. */
+export function isPreRaceSquadWindow(gameStatus, edition) {
+  const upcoming =
+    edition?.upcomingCyclingMatch ?? gameStatus?.nextMatch?.match ?? null;
+
+  if (!upcoming) {
+    return false;
+  }
+
+  return (upcoming.matchNumber ?? 1) === 1 && upcoming.status === "NOT_STARTED";
+}
+
+export function minutesUntilMatch(match) {
+  if (!match) {
+    return null;
+  }
+  const deadline = new Date(match.deadline || match.startTime);
+  const ms = deadline.getTime() - Date.now();
+  return Math.max(0, Math.floor(ms / 60_000));
+}
+
 export function describeTransferWindow(gameStatus, edition) {
+  if (isPreRaceSquadWindow(gameStatus, edition)) {
+    const upcoming =
+      edition?.upcomingCyclingMatch ?? gameStatus?.nextMatch?.match ?? null;
+    const mins = minutesUntilMatch(upcoming);
+    const countdown = mins != null ? ` (~${mins} min tot deadline)` : "";
+    return `Vóór rit 1${countdown} — ploeg GRATIS onbeperkt aanpassen (geen transferkosten).`;
+  }
+
   if (areTransfersOpen(gameStatus, edition)) {
     return "Transfers open — wissels via transfer (niet via gratis ploegbeheer).";
   }

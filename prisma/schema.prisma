@@ -1,0 +1,41 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model AuthCache {
+  id        String   @id @default("wielermanager")
+  cookies   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ManagerDecision {
+  id           Int      @id @default(autoincrement())
+  matchId      Int?
+  matchName    String?
+  decisionType String
+  summary      String   @default("")
+  confidence   Float?
+  reasoning    String   @default("")
+  submitted    Boolean  @default(false)
+  submittedAt  DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([matchId])
+  @@index([submittedAt])
+}
+
+model MigrationMeta {
+  id                  String   @id @default("legacy")
+  legacyImportAt      DateTime @default(now())
+  decisionsImported   Int      @default(0)
+  authImported        Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}

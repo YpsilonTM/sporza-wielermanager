@@ -3,11 +3,11 @@ import path from "node:path";
 
 import { chromium } from "playwright";
 
-import { hasAuthCookie, normalizeCookies } from "./cookies.js";
-import { describeBrowserLaunch, getBrowserLaunchOptions } from "./browser-launch.js";
-import { createAuthLogger } from "./auth-logger.js";
-import { AuthLoginError, AUTH_ERROR_CODES, detectLoginRejection } from "./auth-errors.js";
-import { getDataDir } from "./config.js";
+import { hasAuthCookie, normalizeCookies } from "../src/lib/server/cookies.js";
+import { describeBrowserLaunch, getBrowserLaunchOptions } from "../src/lib/server/browser-launch.js";
+import { createAuthLogger } from "../src/lib/server/auth-logger.js";
+import { AuthLoginError, AUTH_ERROR_CODES, detectLoginRejection } from "../src/lib/server/auth-errors.js";
+import { getDataDir } from "../src/lib/server/config.js";
 
 const CONSENT_SELECTORS = [
   'button:has-text("Alles accepteren")',

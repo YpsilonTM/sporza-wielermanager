@@ -84,7 +84,6 @@ async function resolveValidCookies(settings, candidates) {
 
     try {
       if (await api.isSessionValid(cookies, decodeTurboStream, extractEditionRouteLoader)) {
-        authLog(settings, `${source}: session valid (${cookies.length} cookies)`);
         return cookies;
       }
       authLog(settings, `${source}: rejected — API session check failed (expired or logged out)`);
@@ -184,7 +183,7 @@ export async function createAuthenticatedApi(settings, options = {}) {
       : (message) => console.error(`[auth] ${message}`);
 
   const sessionRef = {
-    cookies: await resolveSession(settings, { onLog: onAuthRefresh })
+    cookies: await resolveSession(settings, {})
   };
 
   const api = new WielermanagerApiClient(settings, {

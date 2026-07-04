@@ -1,15 +1,15 @@
 #!/usr/bin/env bun
 
-import { getSettings, ensureDataDir } from "./config.js";
-import { runAuthRefresh, importCookiesFromHeader, createAuthenticatedApi } from "./auth.js";
-import { formatAuthLoginError } from "./auth-errors.js";
-import { WielermanagerApiClient } from "./wielermanager-api.js";
-import { decodeTurboStream, extractEditionRouteLoader } from "./turbo-stream.js";
-import { parseCyclistsResponse } from "./types.js";
-import { runManager, runRosterBuilder } from "./manager.js";
-import { describeLineup, formatLineupRoleLabel, formatCyclistShort } from "./lineup.js";
-import { getFreeTransfers } from "./rules.js";
-import { areTransfersOpen, calculateNextTransferCost, describeTransferWindow } from "./transfers.js";
+import { getSettings, ensureDataDir } from "../src/lib/server/config.js";
+import { runAuthRefresh, importCookiesFromHeader, createAuthenticatedApi } from "../src/lib/server/auth.js";
+import { formatAuthLoginError } from "../src/lib/server/auth-errors.js";
+import { WielermanagerApiClient } from "../src/lib/server/wielermanager-api.js";
+import { decodeTurboStream, extractEditionRouteLoader } from "../src/lib/server/turbo-stream.js";
+import { parseCyclistsResponse } from "../src/lib/server/types.js";
+import { runManager, runRosterBuilder } from "../src/lib/server/manager.js";
+import { describeLineup, formatLineupRoleLabel, formatCyclistShort } from "../src/lib/server/lineup.js";
+import { getFreeTransfers } from "../src/lib/server/rules.js";
+import { areTransfersOpen, calculateNextTransferCost, describeTransferWindow } from "../src/lib/server/transfers.js";
 
 function parseArgs(argv) {
   const args = argv.slice(2);

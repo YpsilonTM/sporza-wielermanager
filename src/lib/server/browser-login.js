@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { hasAuthCookie, normalizeCookies } from "./cookies.js";
-import { performBrowserLogin } from "./auth-playwright.mjs";
+import { performBrowserLogin } from "../../../scripts/auth-playwright.mjs";
 import { AuthLoginError, AUTH_ERROR_CODES, formatAuthLoginError } from "./auth-errors.js";
 
 export async function loginAndCaptureCookies(settings, options = {}) {
@@ -14,7 +14,7 @@ export async function loginAndCaptureCookies(settings, options = {}) {
 }
 
 async function loginViaNodeHelper(settings, options = {}) {
-  const helperPath = fileURLToPath(new URL("./node-auth-login.mjs", import.meta.url));
+  const helperPath = fileURLToPath(new URL("../../../scripts/node-auth-login.mjs", import.meta.url));
   const onLog = typeof options.onLog === "function" ? options.onLog : null;
 
   return await new Promise((resolve, reject) => {
@@ -22,6 +22,7 @@ async function loginViaNodeHelper(settings, options = {}) {
       cwd: process.cwd(),
       env: {
         ...process.env,
+        DOTENV_CONFIG_QUIET: "true",
         SWM_SETTINGS_JSON: JSON.stringify(settings)
       },
       stdio: ["ignore", "pipe", "pipe"]
@@ -72,7 +73,7 @@ async function loginViaNodeHelper(settings, options = {}) {
       }
 
       try {
-        const cookies = normalizeCookies(JSON.parse(stdout.trim()));
+        const cookies = normalizeCookies(parseHelperStdout(stdout));
         if (!hasAuthCookie(cookies)) {
           reject(
             new AuthLoginError(
@@ -95,6 +96,24 @@ async function loginViaNodeHelper(settings, options = {}) {
       }
     });
   });
+}
+
+function parseHelperStdout(stdout) {
+  const trimmed = stdout.trim();
+  if (!trimmed) {
+    throw new Error("empty stdout");
+  }
+
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    const start = trimmed.indexOf("[");
+    const end = trimmed.lastIndexOf("]");
+    if (start >= 0 && end > start) {
+      return JSON.parse(trimmed.slice(start, end + 1));
+    }
+    throw new Error(`Unrecognized token in stdout: ${trimmed.slice(0, 80)}`);
+  }
 }
 
 export { formatAuthLoginError, AuthLoginError };

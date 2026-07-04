@@ -15,6 +15,8 @@ import {
   describeTransferWindow,
   formatTransferCostLabel,
   getNextTransferNumber,
+  isPreRaceSquadWindow,
+  minutesUntilMatch,
   validateTransfer
 } from "./transfers.js";
 import { buildFallbackRoster } from "./roster-fallback.js";
@@ -157,6 +159,104 @@ export async function runRosterBuilder({
   };
 }
 
+async function runPreRaceSquadReview({
+  settings,
+  api,
+  activeCookies,
+  context,
+  decodeTurboStream,
+  extractEditionRouteLoader,
+  submit,
+  onLog
+}) {
+  const apiKey = settings.geminiApiKey || process.env.GEMINI_API_KEY || "";
+  if (!apiKey) {
+    onLog("Geen GEMINI_API_KEY — sla pre-race ploegcheck over.", "warn");
+    return { roster: context.roster, changed: false, decision: null };
+  }
+
+  const squadSize = getSquadSize(context.gameRules);
+  const currentIds = context.roster.map((c) => c.id).sort((a, b) => a - b);
+  const minutesUntilDeadline = minutesUntilMatch(context.match);
+
+  onLog(
+    `Vóór rit 1${minutesUntilDeadline != null ? ` (${minutesUntilDeadline} min)` : ""} — AI checkt ploeg op blessures/ziekte...`
+  );
+
+  const decision = await predictRosterDecision(
+    apiKey,
+    {
+      editionName: context.editionName,
+      allCyclists: context.allCyclists,
+      gameRules: context.gameRules,
+      currentRoster: context.roster,
+      match: context.match,
+      minutesUntilDeadline
+    },
+    { onDebug: (msg) => onLog(msg, "debug") }
+  );
+
+  if (!decision?.cyclistIds?.length) {
+    onLog("Pre-race ploegcheck gaf geen resultaat — huidige ploeg behouden.", "warn");
+    return { roster: context.roster, changed: false, decision: null };
+  }
+
+  const validation = validateRosterIds(decision.cyclistIds, context.allCyclists, context.gameRules);
+  if (!validation.valid) {
+    onLog(`Pre-race ploegwijziging ongeldig: ${validation.errors.join("; ")}`, "warn");
+    return { roster: context.roster, changed: false, decision };
+  }
+
+  const nextIds = [...validation.roster.map((c) => c.id)].sort((a, b) => a - b);
+  const changed =
+    nextIds.length !== currentIds.length || nextIds.some((id, index) => id !== currentIds[index]);
+
+  onLog(`AI summary: ${decision.summary}`);
+
+  if (!changed) {
+    onLog("Geen ploegwijzigingen nodig volgens AI.");
+    return { roster: context.roster, changed: false, decision };
+  }
+
+  const outIds = currentIds.filter((id) => !nextIds.includes(id));
+  const inIds = nextIds.filter((id) => !currentIds.includes(id));
+  onLog(`Ploegwijziging: ${outIds.join(", ")} eruit → ${inIds.join(", ")} erin`);
+
+  for (const cyclist of validation.roster) {
+    if (inIds.includes(cyclist.id)) {
+      const pick = decision.picks?.find((entry) => entry.cyclistId === cyclist.id);
+      onLog(`  + ${formatCyclistLabel(cyclist)}${pick?.reasoning ? ` — ${pick.reasoning}` : ""}`);
+    }
+  }
+
+  if (submit) {
+    onLog("Bijgewerkte ploeg indienen...");
+    await api.saveRoster(activeCookies(), validation.roster.map((c) => c.id));
+  } else {
+    onLog("Dry-run — ploeg niet aangepast.");
+  }
+
+  await logManagerDecision(settings, {
+    edition: settings.editionSlug,
+    type: "pre-race-roster",
+    matchId: context.match?.id,
+    matchName: context.match?.name,
+    decision,
+    cyclistIds: validation.roster.map((c) => c.id),
+    ridersOut: outIds,
+    ridersIn: inIds,
+    dryRun: !submit,
+    submitted: submit
+  });
+
+  return {
+    roster: validation.roster,
+    changed: true,
+    decision,
+    submitted: submit
+  };
+}
+
 export async function runManager({
   settings,
   api,
@@ -220,6 +320,23 @@ export async function runManager({
     };
   }
 
+  const preRaceSquadWindow = isPreRaceSquadWindow(context.gameStatus, context.overview?.edition);
+  if (preRaceSquadWindow && rosterIsComplete(context.roster, context.gameRules)) {
+    const review = await runPreRaceSquadReview({
+      settings,
+      api,
+      activeCookies,
+      context,
+      decodeTurboStream,
+      extractEditionRouteLoader,
+      submit,
+      onLog
+    });
+    if (review.changed) {
+      context = { ...context, roster: review.roster };
+    }
+  }
+
   onLog(`AI analyseert lineup voor ${context.match.name} (${context.match.terrainType}, ${context.match.matchType})...`);
 
   const decision = await predictLineupDecision(
@@ -229,7 +346,9 @@ export async function runManager({
       roster: context.roster,
       allCyclists: context.allCyclists,
       gameRules: context.gameRules,
-      transfersAllowed: areTransfersOpen(context.gameStatus, context.overview?.edition)
+      transfersAllowed: areTransfersOpen(context.gameStatus, context.overview?.edition),
+      preRaceSquadWindow,
+      minutesUntilDeadline: minutesUntilMatch(context.match)
     },
     { onDebug: (msg) => onLog(msg, "debug") }
   );

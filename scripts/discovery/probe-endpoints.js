@@ -1,9 +1,9 @@
 #!/usr/bin/env bun
 
-import { getSettings } from "../config.js";
-import { WielermanagerApiClient } from "../wielermanager-api.js";
-import { decodeTurboStream, extractEditionRouteLoader } from "../turbo-stream.js";
-import { getCachedCookies } from "../auth.js";
+import { getSettings } from "../src/lib/server/config.js";
+import { WielermanagerApiClient } from "../src/lib/server/wielermanager-api.js";
+import { decodeTurboStream, extractEditionRouteLoader } from "../src/lib/server/turbo-stream.js";
+import { getCachedCookies } from "../src/lib/server/auth.js";
 
 const settings = getSettings();
 const api = new WielermanagerApiClient(settings);

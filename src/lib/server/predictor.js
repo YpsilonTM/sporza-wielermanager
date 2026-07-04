@@ -153,11 +153,13 @@ function compactCyclist(cyclist) {
 }
 
 function buildRosterPrompt(context) {
-  const { editionName, allCyclists, gameRules, todayStr } = context;
+  const { editionName, allCyclists, gameRules, todayStr, currentRoster, match, minutesUntilDeadline } =
+    context;
   const squadSize = getSquadSize(gameRules);
   const budgetLimit = getBudgetLimit(gameRules);
   const maxPerTeam = getMaxAthletesFromSameTeam(gameRules);
   const minPrice = getMinimumAthletePrice(gameRules);
+  const isPreRaceReview = Array.isArray(currentRoster) && currentRoster.length === squadSize;
 
   const available = (allCyclists || [])
     .filter((c) => c.participating !== false && Number(c.price) >= minPrice)
@@ -171,6 +173,38 @@ function buildRosterPrompt(context) {
     })
     .slice(0, 120)
     .map(compactCyclist);
+
+  if (isPreRaceReview) {
+    const currentIds = new Set(currentRoster.map((c) => c.id));
+    const replacements = available.filter((c) => !currentIds.has(c.id)).slice(0, 60);
+
+    return `
+Je bent een expert fantasy wielermanager voor Sporza Wielermanager.
+VANDAAG: ${todayStr} (Europe/Brussels).
+
+Doel: herzie mijn BESTAANDE ploeg vóór rit 1. Tot de deadline mag ik GRATIS en ONBEPERKT renners wisselen in mijn squad.
+${minutesUntilDeadline != null ? `Deadline over ~${minutesUntilDeadline} minuten.` : ""}
+${match ? `Eerste rit: ${match.name} (${match.terrainType ?? "?"}, ${match.matchType ?? "?"})` : ""}
+
+ZOEK ACTUEEL (Google Search) per renner in MIJN PLOEG:
+- blessures, ziekte, maag-/maag-darmproblemen, griep, vermoeidheid
+- DNS/DNF-risico, twijfel over start of volledige etappe
+
+BESLISREGELS:
+- Vervang renners met bevestigde of waarschijnlijke uitval door passende vervangers
+- Behoud gezonde kernrenners — alleen noodzakelijke wijzigingen
+- Geen transferkosten; dit is gratis ploegbeheer vóór rit 1
+- Exact ${squadSize} unieke cyclistIds, budget max ${budgetLimit}M, max ${maxPerTeam} per team
+
+HUIDIGE PLOEG (${squadSize} renners):
+${JSON.stringify(currentRoster.map(compactCyclist), null, 2)}
+
+MOGELIJKE VERVANGERS (niet in huidige ploeg):
+${JSON.stringify(replacements, null, 2)}
+
+Return ALLEEN JSON met cyclistIds (${squadSize} integers), picks (reasoning per renner), confidence, summary (vermeld expliciet wie eruit gaat en waarom).
+`.trim();
+  }
 
   return `
 Je bent een expert fantasy wielermanager voor Sporza Wielermanager.
@@ -189,7 +223,8 @@ HARde REGELS (moeten kloppen):
 STRATEGIE:
 - Balans voor een meerweekse ronde: ronderenners/GC, sprinters, klimmers, tijdrijders, knechten
 - Mix prijs/kwaliteit zodat budget optimaal benut wordt (niet te veel budget ongebruikt laten)
-- Gebruik Google Search voor startlijst, favorieten en blessurenieuws van dit seizoen
+- Gebruik Google Search voor startlijst, favorieten, blessurenieuws en actuele gezondheidsupdates
+- Sluit renners uit met bevestigde blessure, ziekte of maagproblemen
 
 BESCHIKBARE RENNERS (subset — kies alleen ids uit deze lijst of de volledige deelnemerslijst):
 ${JSON.stringify(available, null, 2)}
@@ -203,7 +238,16 @@ Return ALLEEN JSON met:
 }
 
 function buildPrompt(context) {
-  const { match, roster, allCyclists, gameRules, todayStr, transfersAllowed } = context;
+  const {
+    match,
+    roster,
+    allCyclists,
+    gameRules,
+    todayStr,
+    transfersAllowed,
+    preRaceSquadWindow,
+    minutesUntilDeadline
+  } = context;
   const lineupSize = getLineupSize(gameRules);
   const starterCount = getStarterCount(gameRules);
   const substituteSlots = getSubstituteSlots(gameRules);
@@ -227,14 +271,26 @@ function buildPrompt(context) {
     ? `Optioneel: stel maximaal 1 transfer voor bij bevestigde blessure/uitval (zelfde aantal renners in/uit).
 - Transfers 1-3 gratis, daarna +1M kost per transfer (afgetrokken van budget)
 - Stel GEEN transfer voor tenzij een renner uit je ploeg bevestigd niet start`
-    : `Transfers zijn NOG NIET open (vóór rit 1). Stel GEEN transfers voor — ploegwijzigingen gaan via gratis ploegbeheer.`;
+    : preRaceSquadWindow
+      ? `Transfers via transfer-API zijn gesloten, maar vóór rit 1 is de ploeg al herzien op gezondheid.
+Stel GEEN transfers voor in JSON — focus op lineup. Zieke/gekwetste renners die nog in de ploeg zitten: NOOIT starter of kapitein.`
+      : `Transfers zijn NOG NIET open (vóór rit 1). Stel GEEN transfers voor — ploegwijzigingen gaan via gratis ploegbeheer.`;
+
+  const deadlineNote =
+    minutesUntilDeadline != null ? `\nDeadline over ~${minutesUntilDeadline} minuten.` : "";
 
   return `
 Je bent een expert fantasy wielermanager voor Sporza Wielermanager (Tour de France 2026).
-VANDAAG: ${todayStr} (Europe/Brussels).
+VANDAAG: ${todayStr} (Europe/Brussels).${deadlineNote}
 
 Doel: kies de beste lineup van ${lineupSize} renners uit mijn vaste ploeg (${squadSize} renners) voor de komende rit.
 ${transferRule}
+
+GEZONDHEID (KRITISCH — altijd eerst checken via Google Search):
+- Zoek actueel nieuws per renner: blessures, maag-/maag-darmproblemen, ziekte, vermoeidheid, DNS-risico
+- Renners met gezondheidsproblemen: NOOIT CAPTAIN, NOOIT starter — alleen SUBSTITUTE (bank) als ze nog in de ploeg zitten
+- Bij twijfel over fitness: bank, niet starten
+- Kapitein = renner met hoogste verwachte punten die GEZOND is en past bij het ritprofiel
 
 RIT:
 - id: ${match.id}
@@ -251,7 +307,7 @@ ${benchRule}
 - Kies starters op basis van ritprofiel (TTT/ITT/bergen/vlak); zet minder geschikte renners op de bank
 - Alleen renners uit MIJN ROSTER in lineup${transfersAllowed ? " (tenzij je transfer voorstelt)" : ""}
 
-Gebruik Google Search voor recente vorm, blessures en etappeverwachting.
+Gebruik Google Search voor recente vorm, blessures, gezondheidsupdates en etappeverwachting vandaag.
 
 MIJN ROSTER:
 ${JSON.stringify(rosterCompact, null, 2)}

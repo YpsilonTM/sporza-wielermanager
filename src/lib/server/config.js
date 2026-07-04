@@ -2,7 +2,7 @@ import path from "node:path";
 import dotenv from "dotenv";
 import fs from "node:fs/promises";
 
-dotenv.config();
+dotenv.config({ quiet: true });
 
 export function getDataDir() {
   const dir = process.env.DATA_DIR || "";
@@ -47,6 +47,16 @@ export function getCookiesCachePath(settings) {
   }
   return getDataPath(path.basename(file));
 }
+
+export function getDatabaseUrl() {
+  const fromEnv = process.env.DATABASE_URL?.trim();
+  if (fromEnv) {
+    return fromEnv;
+  }
+  return `file:${path.join(getDataDir(), "wielermanager.db")}`;
+}
+
+export const AUTO_MANAGE_WINDOW_MS = Number(process.env.AUTO_MANAGE_WINDOW_MS || 60 * 60 * 1000);
 
 export function editionUrl(settings, suffix = "") {
   const edition = settings.editionSlug;
