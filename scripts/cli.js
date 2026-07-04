@@ -133,7 +133,7 @@ async function cmdTeam(settings) {
 
   try {
     const transferState = await api.fetchTransferState(getCookies());
-    const freeTransfers = getFreeTransfers(overview.gameRules ?? {});
+    const freeTransfers = getFreeTransfers(overview.gameRules ?? {}, transferState);
     const freeLeft = Math.max(0, freeTransfers - transferState.usedTransfers);
     const nextCost = calculateNextTransferCost(transferState.usedTransfers, overview.gameRules ?? {});
     console.log(`\n${describeTransferWindow(overview.gameStatus, overview.edition)}`);

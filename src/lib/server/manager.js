@@ -372,7 +372,7 @@ export async function runManager({
   onLog(`Confidence: ${decision.confidence}${decision.escalated ? " (escalated)" : ""}`);
 
   const transferState = await api.fetchTransferState(activeCookies());
-  const freeTransfers = getFreeTransfers(context.gameRules);
+  const freeTransfers = getFreeTransfers(context.gameRules, transferState);
   const transfersOpen = areTransfersOpen(context.gameStatus, context.overview?.edition);
   onLog(describeTransferWindow(context.gameStatus, context.overview?.edition));
   onLog(

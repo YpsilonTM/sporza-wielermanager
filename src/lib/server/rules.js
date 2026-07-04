@@ -2,7 +2,7 @@ export const RULES = {
   squadSize: 16,
   lineupSize: 12,
   budgetMillion: 100,
-  freeTransfersBeforeCost: 3,
+  freeTransfersBeforeCost: 4,
   transferCostIncreasePerTransfer: 1
 };
 
@@ -175,8 +175,25 @@ export function validateLineup(lineup, roster, gameRules) {
   return { valid: errors.length === 0, errors, starters, substitutes };
 }
 
-export function getFreeTransfers(gameRules) {
-  return gameRules?.transfer?.freeTransfers ?? RULES.freeTransfersBeforeCost;
+export function getFreeTransfers(gameRules, transferSummary) {
+  const candidates = [
+    transferSummary?.numberOfFreeTransfers,
+    transferSummary?.freeTransfers,
+    gameRules?.transfer?.freeTransfers,
+    gameRules?.transfer?.numberOfFreeTransfers,
+    gameRules?.transfers?.freeTransfers,
+    gameRules?.transfers?.numberOfFreeTransfers,
+    gameRules?.numberOfFreeTransfers
+  ];
+
+  for (const value of candidates) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+
+  return RULES.freeTransfersBeforeCost;
 }
 
 export function lineupToApiPayload(lineup) {

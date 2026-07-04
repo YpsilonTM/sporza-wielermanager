@@ -98,13 +98,15 @@ export async function fetchOverviewData(): Promise<OverviewData> {
 
 	try {
 		const rawTransferState = await api.fetchTransferState(getCookies());
+		const freeTransfers = getFreeTransfers(overview.gameRules ?? {}, rawTransferState);
+		const freeTransfersRemaining =
+			typeof rawTransferState.remainingFreeTransfers === 'number'
+				? Math.max(0, rawTransferState.remainingFreeTransfers)
+				: Math.max(0, freeTransfers - rawTransferState.usedTransfers);
 		transferState = {
 			usedTransfers: rawTransferState.usedTransfers,
-			freeTransfers: getFreeTransfers(overview.gameRules ?? {}),
-			freeTransfersRemaining: Math.max(
-				0,
-				getFreeTransfers(overview.gameRules ?? {}) - rawTransferState.usedTransfers
-			),
+			freeTransfers,
+			freeTransfersRemaining,
 			remainingBudget: rawTransferState.remainingBudget,
 			transfersOpen: areTransfersOpen(overview.gameStatus, overview.edition)
 		};

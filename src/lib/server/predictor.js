@@ -7,7 +7,8 @@ import {
   getStarterCount,
   getSubstituteSlots,
   getMaxAthletesFromSameTeam,
-  getMinimumAthletePrice
+  getMinimumAthletePrice,
+  getFreeTransfers
 } from "./rules.js";
 
 const REPAIR_MODEL = "gemini-3.1-flash-lite";
@@ -269,7 +270,7 @@ function buildPrompt(context) {
 
   const transferRule = transfersAllowed
     ? `Optioneel: stel maximaal 1 transfer voor bij bevestigde blessure/uitval (zelfde aantal renners in/uit).
-- Transfers 1-3 gratis, daarna +1M kost per transfer (afgetrokken van budget)
+- Transfers 1-${getFreeTransfers(gameRules)} gratis, daarna +1M kost per transfer (afgetrokken van budget)
 - Stel GEEN transfer voor tenzij een renner uit je ploeg bevestigd niet start`
     : preRaceSquadWindow
       ? `Transfers via transfer-API zijn gesloten, maar vóór rit 1 is de ploeg al herzien op gezondheid.

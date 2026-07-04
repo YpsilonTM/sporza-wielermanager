@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
+	getFreeTransfers,
 	getLineupSize,
 	getSquadSize,
 	getStarterCount,
@@ -141,6 +142,21 @@ describe('rosterIsComplete', () => {
 
 	test('returns false for incomplete roster', () => {
 		expect(rosterIsComplete(validRoster().slice(0, 2), gameRules)).toBe(false);
+	});
+});
+
+describe('getFreeTransfers', () => {
+	test('prefers API gameRules value over default', () => {
+		expect(getFreeTransfers({ transfer: { freeTransfers: 3 } })).toBe(3);
+		expect(getFreeTransfers({ transfer: { freeTransfers: 4 } })).toBe(4);
+	});
+
+	test('prefers transfer summary from Sporza API', () => {
+		expect(getFreeTransfers({}, { numberOfFreeTransfers: 4 })).toBe(4);
+	});
+
+	test('defaults to 4 free transfers', () => {
+		expect(getFreeTransfers({})).toBe(4);
 	});
 });
 
