@@ -1,5 +1,6 @@
 <script lang="ts">
 	import RiderAvatar from '$lib/components/RiderAvatar.svelte';
+	import type { TransferStateView } from '$lib/types/overview';
 	import type { ManagePreviewView, RosterPreviewView } from '$lib/types/preview';
 
 	let {
@@ -11,7 +12,8 @@
 		canSubmit = false,
 		submitBusy = false,
 		hasPendingTransfer = false,
-		allowTransfers = false,
+		includeTransfer = $bindable(true),
+		transferState = null,
 		onsubmit
 	}: {
 		summary?: string;
@@ -22,7 +24,8 @@
 		canSubmit?: boolean;
 		submitBusy?: boolean;
 		hasPendingTransfer?: boolean;
-		allowTransfers?: boolean;
+		includeTransfer?: boolean;
+		transferState?: TransferStateView | null;
 		onsubmit?: () => void;
 	} = $props();
 
@@ -195,12 +198,31 @@
 		{/if}
 
 		{#if canSubmit && !submitted}
-			<div class="border-t border-slate-700/80 pt-3">
-				{#if hasPendingTransfer && !allowTransfers}
-					<p class="mb-2 text-xs text-amber-300">
-						Simulatie bevat een transfer. Vink “Transfer toestaan” aan in de sidebar om die
-						mee te sturen.
-					</p>
+			<div class="border-t border-slate-700/80 pt-3 space-y-3">
+				{#if hasPendingTransfer}
+					<div class="rounded-lg border border-amber-800/50 bg-amber-950/20 p-3">
+						<label class="flex cursor-pointer items-start gap-2 text-sm text-slate-200">
+							<input class="mt-0.5 accent-emerald-500" type="checkbox" bind:checked={includeTransfer} />
+							<span>
+								Transfer uitvoeren bij indienen
+								<span class="mt-1 block text-xs text-slate-400">
+									AI stelt een wissel voor — vink uit als je enkel de lineup wilt indienen.
+									{#if transferState}
+										<span class="mt-0.5 block">
+											{transferState.freeTransfersRemaining} gratis resterend · €{transferState.remainingBudget}M
+											budget
+										</span>
+									{/if}
+								</span>
+							</span>
+						</label>
+						{#if !includeTransfer}
+							<p class="mt-2 text-xs text-amber-300/90">
+								Zonder transfer wordt alleen de lineup ingediend. Die is berekend voor de nieuwe ploeg —
+								indienen kan mislukken als het voorstel renners bevat die nog niet in je ploeg zitten.
+							</p>
+						{/if}
+					</div>
 				{/if}
 				<button
 					class="btn-primary w-full !py-3"
@@ -211,6 +233,8 @@
 					{#if submitBusy}
 						<span class="spinner" aria-hidden="true"></span>
 						Indienen bij Sporza…
+					{:else if hasPendingTransfer && includeTransfer}
+						Lineup + transfer indienen
 					{:else}
 						Voorstel indienen bij Sporza
 					{/if}

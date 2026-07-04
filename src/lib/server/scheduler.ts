@@ -2,13 +2,18 @@ import { Cron } from 'croner';
 import { pinoLogger } from './logger';
 import { runAutoManage } from './jobs';
 
-let started = false;
+const SCHEDULER_KEY = '__sporzaWielermanagerSchedulerStarted';
+
+type SchedulerGlobal = typeof globalThis & {
+	[SCHEDULER_KEY]?: boolean;
+};
 
 export function startScheduler(): void {
-	if (started) {
+	const globalState = globalThis as SchedulerGlobal;
+	if (globalState[SCHEDULER_KEY]) {
 		return;
 	}
-	started = true;
+	globalState[SCHEDULER_KEY] = true;
 
 	const minutes = Number(process.env.CRON_CHECK_MINUTES || 15);
 	pinoLogger.info(`🕐 Auto-manage check elke ${minutes} minuten.`);

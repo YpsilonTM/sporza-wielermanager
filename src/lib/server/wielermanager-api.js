@@ -182,12 +182,16 @@ export class WielermanagerApiClient {
 
     const totalTransfers = Number(summary.totalTransfers) || 0;
     const totalVirtualTransfers = Number(summary.totalVirtualTransfers) || 0;
+    const usedTransfers = totalTransfers + totalVirtualTransfers;
+    const remainingFreeTransfers = Number(summary.remainingFreeTransfers ?? summary.freeTransfersRemaining);
+    const parsedRemaining = Number.isFinite(remainingFreeTransfers) ? remainingFreeTransfers : null;
 
     return {
       ...summary,
       totalTransfers,
       totalVirtualTransfers,
-      usedTransfers: totalTransfers + totalVirtualTransfers,
+      usedTransfers,
+      remainingFreeTransfers: parsedRemaining,
       remainingBudget: summary.remainingBudget ?? null
     };
   }

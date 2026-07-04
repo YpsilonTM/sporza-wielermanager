@@ -3,19 +3,24 @@ import type { RequestHandler } from './$types';
 import { submitPreviewJob } from '$lib/server/jobs';
 import type { PreviewSubmitPayload } from '$lib/types/preview';
 
-export const POST: RequestHandler = async ({ request, url }) => {
-	const allowTransfers = url.searchParams.get('allowTransfers') === '1';
+type SubmitPreviewRequest = PreviewSubmitPayload & { includeTransfer?: boolean };
 
-	let payload: PreviewSubmitPayload;
+export const POST: RequestHandler = async ({ request, url }) => {
+	let body: SubmitPreviewRequest;
 	try {
-		payload = (await request.json()) as PreviewSubmitPayload;
+		body = (await request.json()) as SubmitPreviewRequest;
 	} catch {
 		return json({ error: 'Ongeldige payload' }, { status: 400 });
 	}
 
+	const { includeTransfer, ...payload } = body;
+
 	if (!payload?.kind) {
 		return json({ error: 'Ontbrekende submit payload' }, { status: 400 });
 	}
+
+	const allowTransfers =
+		includeTransfer === true || (includeTransfer === undefined && url.searchParams.get('allowTransfers') === '1');
 
 	try {
 		await submitPreviewJob(payload, { allowTransfers });

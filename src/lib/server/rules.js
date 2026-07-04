@@ -178,7 +178,6 @@ export function validateLineup(lineup, roster, gameRules) {
 export function getFreeTransfers(gameRules, transferSummary) {
   const candidates = [
     transferSummary?.numberOfFreeTransfers,
-    transferSummary?.freeTransfers,
     gameRules?.transfer?.freeTransfers,
     gameRules?.transfer?.numberOfFreeTransfers,
     gameRules?.transfers?.freeTransfers,
@@ -194,6 +193,24 @@ export function getFreeTransfers(gameRules, transferSummary) {
   }
 
   return RULES.freeTransfersBeforeCost;
+}
+
+export function getFreeTransfersRemaining(transferSummary, gameRules) {
+  const remainingCandidates = [
+    transferSummary?.remainingFreeTransfers,
+    transferSummary?.freeTransfersRemaining,
+    transferSummary?.freeTransfers
+  ];
+
+  for (const value of remainingCandidates) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed) && parsed >= 0) {
+      return parsed;
+    }
+  }
+
+  const usedTransfers = Number(transferSummary?.usedTransfers) || 0;
+  return Math.max(0, getFreeTransfers(gameRules, transferSummary) - usedTransfers);
 }
 
 export function lineupToApiPayload(lineup) {

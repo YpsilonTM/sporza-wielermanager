@@ -8,7 +8,7 @@ import {
   getSquadSize,
   getStarterCount,
   getSubstituteSlots,
-  getFreeTransfers
+  getFreeTransfersRemaining
 } from "./rules.js";
 import {
   areTransfersOpen,
@@ -372,11 +372,11 @@ export async function runManager({
   onLog(`Confidence: ${decision.confidence}${decision.escalated ? " (escalated)" : ""}`);
 
   const transferState = await api.fetchTransferState(activeCookies());
-  const freeTransfers = getFreeTransfers(context.gameRules, transferState);
+  const freeRemaining = getFreeTransfersRemaining(transferState, context.gameRules);
   const transfersOpen = areTransfersOpen(context.gameStatus, context.overview?.edition);
   onLog(describeTransferWindow(context.gameStatus, context.overview?.edition));
   onLog(
-    `Transfers: ${transferState.usedTransfers} gebruikt (${Math.max(0, freeTransfers - transferState.usedTransfers)} gratis resterend)`
+    `Transfers: ${transferState.usedTransfers} gebruikt (${freeRemaining} gratis resterend)`
   );
 
   let transferResult = null;
@@ -384,6 +384,8 @@ export async function runManager({
 
   if (decision.transfers?.length) {
     const transfer = decision.transfers[0];
+    const ridersIn = Array.isArray(transfer?.ridersIn) ? transfer.ridersIn : [];
+    const ridersOut = Array.isArray(transfer?.ridersOut) ? transfer.ridersOut : [];
 
     if (!transfersOpen) {
       onLog(
@@ -392,7 +394,7 @@ export async function runManager({
       );
     } else {
       transferResult = validateTransfer(
-        transfer,
+        { ...transfer, ridersIn, ridersOut },
         context.roster,
         context.allCyclists,
         context.gameRules,
@@ -404,7 +406,7 @@ export async function runManager({
         transferResult = null;
       } else {
         const nextNumber = getNextTransferNumber(transferState.usedTransfers);
-        onLog(`Transfer voorstel: ${transfer.ridersOut.join(",")} → ${transfer.ridersIn.join(",")}`);
+        onLog(`Transfer voorstel: ${ridersOut.join(",")} → ${ridersIn.join(",")}`);
         onLog(
           formatTransferCostLabel(nextNumber, transferResult.transferCost)
         );
@@ -419,7 +421,7 @@ export async function runManager({
           );
         } else if (submit && allowTransfers) {
           onLog("Transfer indienen...");
-          await api.createTransfer(activeCookies(), transfer.ridersIn, transfer.ridersOut);
+          await api.createTransfer(activeCookies(), ridersIn, ridersOut);
           context.roster = transferResult.nextRoster;
           rosterForLineup = transferResult.nextRoster;
           onLog("Transfer uitgevoerd.");

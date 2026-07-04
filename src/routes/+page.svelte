@@ -27,7 +27,7 @@
 	let overviewError = $state('');
 	let jobBusy = $state(false);
 	let jobBusyLabel = $state('');
-	let allowTransfers = $state(false);
+	let includeTransfer = $state(true);
 	let previewSummary = $state('');
 	let previewReasoning = $state('');
 	let previewSubmitted = $state(false);
@@ -52,6 +52,7 @@
 		managePreview = null;
 		rosterPreview = null;
 		submitPayload = null;
+		includeTransfer = true;
 	}
 
 	async function loadOverview() {
@@ -76,6 +77,9 @@
 	}
 
 	const canSubmitPreview = $derived(Boolean(!previewSubmitted && submitPayload));
+	const hasPendingTransfer = $derived(
+		Boolean(managePreview?.transfer && !managePreview.transfer.executed)
+	);
 
 	function applyManage(data: Extract<SseEvent, { type: 'manage' }>) {
 		jobBusy = false;
@@ -87,6 +91,9 @@
 		managePreview = data.preview ?? null;
 		rosterPreview = null;
 		submitPayload = data.submitted ? null : (data.submit ?? null);
+		includeTransfer = Boolean(
+			managePreview?.transfer && !managePreview.transfer.executed
+		);
 	}
 
 	function handleManageFailed(data: Extract<SseEvent, { type: 'manage-failed' }>) {
@@ -121,10 +128,17 @@
 				? 'Ploegvoorstel indienen'
 				: 'Lineup-voorstel indienen';
 
+		const transferNote =
+			hasPendingTransfer && includeTransfer
+				? '\n\nInclusief de voorgestelde transfer.'
+				: hasPendingTransfer
+					? '\n\nZonder transfer — enkel lineup.'
+					: '';
+
 		const description =
 			submitPayload.kind === 'roster'
 				? 'Dit AI-ploegvoorstel wordt ingediend bij Sporza.'
-				: `Dit lineup-voorstel wordt ingediend voor ${submitPayload.matchName ?? 'deze rit'}.${submitPayload.summary ? `\n\n${submitPayload.summary}` : ''}`;
+				: `Dit lineup-voorstel wordt ingediend voor ${submitPayload.matchName ?? 'deze rit'}.${submitPayload.summary ? `\n\n${submitPayload.summary}` : ''}${transferNote}`;
 
 		if (!(await askConfirm(confirmDialog, { title, description, confirmLabel: 'Indienen bij Sporza' }))) {
 			return;
@@ -132,11 +146,10 @@
 
 		submitBusy = true;
 		try {
-			const params = allowTransfers ? '?allowTransfers=1' : '';
-			const res = await dashboardFetch(dashboardKey, `/api/run/submit-preview${params}`, {
+			const res = await dashboardFetch(dashboardKey, '/api/run/submit-preview', {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify(submitPayload)
+				body: JSON.stringify({ ...submitPayload, includeTransfer })
 			});
 			const payload = await res.json();
 			if (!res.ok) throw new Error(payload.error || 'Indienen mislukt.');
@@ -160,7 +173,7 @@
 			const confirmed = await askConfirm(confirmDialog, {
 				title: 'Direct indienen',
 				description:
-					'AI draait opnieuw en dient meteen in bij Sporza — zonder preview of diff. Weet je het zeker?',
+					'AI draait opnieuw en dient meteen in bij Sporza — zonder preview, diff of transfer. Weet je het zeker?',
 				confirmLabel: 'Direct indienen'
 			});
 			if (!confirmed) return;
@@ -173,7 +186,6 @@
 		try {
 			const params = new URLSearchParams({ matchId: String(matchId) });
 			if (dryRun) params.set('dryRun', '1');
-			if (allowTransfers) params.set('allowTransfers', '1');
 			const res = await dashboardFetch(dashboardKey, `/api/run/manage?${params}`, { method: 'POST' });
 			if (res.status === 202) return;
 			if (!res.ok) {
@@ -304,8 +316,9 @@
 				{rosterPreview}
 				canSubmit={canSubmitPreview}
 				submitBusy={submitBusy}
-				hasPendingTransfer={Boolean(managePreview?.transfer && !managePreview.transfer.executed)}
-				{allowTransfers}
+				{hasPendingTransfer}
+				bind:includeTransfer
+				transferState={overview?.transferState ?? null}
 				onsubmit={submitPreview}
 			/>
 		{/if}
@@ -315,8 +328,6 @@
 		{#if overview?.ui}
 			<ActionBar
 				ui={overview.ui}
-				transferState={overview.transferState}
-				bind:allowTransfers
 				busy={jobBusy}
 				busyLabel={jobBusyLabel}
 				onprimary={handlePrimary}

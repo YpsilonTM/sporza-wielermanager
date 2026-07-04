@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { browser } from '$app/environment';
 	import RiderAvatar from '$lib/components/RiderAvatar.svelte';
 	import type { EnrichedStage, LineupView } from '$lib/types/overview';
 
@@ -40,7 +41,7 @@
 	);
 
 	const stageProfileSrc = $derived(
-		stage?.stageProfileUrl
+		browser && stage?.stageProfileUrl
 			? `/api/stage-profile?url=${encodeURIComponent(stage.stageProfileUrl)}`
 			: null
 	);

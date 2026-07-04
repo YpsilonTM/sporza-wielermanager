@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
 	getFreeTransfers,
+	getFreeTransfersRemaining,
 	getLineupSize,
 	getSquadSize,
 	getStarterCount,
@@ -155,8 +156,23 @@ describe('getFreeTransfers', () => {
 		expect(getFreeTransfers({}, { numberOfFreeTransfers: 4 })).toBe(4);
 	});
 
+	test('does not treat summary.freeTransfers as total allowance', () => {
+		expect(getFreeTransfers({}, { freeTransfers: 3 })).toBe(4);
+	});
+
 	test('defaults to 4 free transfers', () => {
 		expect(getFreeTransfers({})).toBe(4);
+	});
+});
+
+describe('getFreeTransfersRemaining', () => {
+	test('prefers remaining count from transfer summary', () => {
+		expect(getFreeTransfersRemaining({ freeTransfers: 4, usedTransfers: 0 }, {})).toBe(4);
+		expect(getFreeTransfersRemaining({ remainingFreeTransfers: 2, usedTransfers: 2 }, {})).toBe(2);
+	});
+
+	test('falls back to total minus used', () => {
+		expect(getFreeTransfersRemaining({ usedTransfers: 1 }, { transfer: { freeTransfers: 4 } })).toBe(3);
 	});
 });
 

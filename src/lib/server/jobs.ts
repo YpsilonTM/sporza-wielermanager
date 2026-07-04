@@ -6,7 +6,7 @@ import { WielermanagerApiClient } from './wielermanager-api.js';
 import { decodeTurboStream, extractEditionRouteLoader } from './turbo-stream.js';
 import { runManager, runRosterBuilder, buildManagerContext } from './manager.js';
 import { describeLineup } from './lineup.js';
-import { getFreeTransfers, validateLineup, lineupToApiPayload, validateRosterIds } from './rules.js';
+import { getFreeTransfers, validateLineup, lineupToApiPayload, validateRosterIds, getFreeTransfersRemaining } from './rules.js';
 import { areTransfersOpen, validateTransfer } from './transfers.js';
 import { pinoLogger, broadcastSse } from './logger';
 import {
@@ -99,10 +99,7 @@ export async function fetchOverviewData(): Promise<OverviewData> {
 	try {
 		const rawTransferState = await api.fetchTransferState(getCookies());
 		const freeTransfers = getFreeTransfers(overview.gameRules ?? {}, rawTransferState);
-		const freeTransfersRemaining =
-			typeof rawTransferState.remainingFreeTransfers === 'number'
-				? Math.max(0, rawTransferState.remainingFreeTransfers)
-				: Math.max(0, freeTransfers - rawTransferState.usedTransfers);
+		const freeTransfersRemaining = getFreeTransfersRemaining(rawTransferState, overview.gameRules ?? {});
 		transferState = {
 			usedTransfers: rawTransferState.usedTransfers,
 			freeTransfers,

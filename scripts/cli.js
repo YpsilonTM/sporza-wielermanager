@@ -8,7 +8,7 @@ import { decodeTurboStream, extractEditionRouteLoader } from "../src/lib/server/
 import { parseCyclistsResponse } from "../src/lib/server/types.js";
 import { runManager, runRosterBuilder } from "../src/lib/server/manager.js";
 import { describeLineup, formatLineupRoleLabel, formatCyclistShort } from "../src/lib/server/lineup.js";
-import { getFreeTransfers } from "../src/lib/server/rules.js";
+import { getFreeTransfers, getFreeTransfersRemaining } from "../src/lib/server/rules.js";
 import { areTransfersOpen, calculateNextTransferCost, describeTransferWindow } from "../src/lib/server/transfers.js";
 
 function parseArgs(argv) {
@@ -134,7 +134,7 @@ async function cmdTeam(settings) {
   try {
     const transferState = await api.fetchTransferState(getCookies());
     const freeTransfers = getFreeTransfers(overview.gameRules ?? {}, transferState);
-    const freeLeft = Math.max(0, freeTransfers - transferState.usedTransfers);
+    const freeLeft = getFreeTransfersRemaining(transferState, overview.gameRules ?? {});
     const nextCost = calculateNextTransferCost(transferState.usedTransfers, overview.gameRules ?? {});
     console.log(`\n${describeTransferWindow(overview.gameStatus, overview.edition)}`);
     console.log(

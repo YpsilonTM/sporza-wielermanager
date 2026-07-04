@@ -108,7 +108,12 @@ export function getNextTransferNumber(usedTransfers) {
 
 export function validateTransfer(transfer, roster, allCyclists, gameRules, usedTransfers = 0) {
   const errors = [];
-  const { ridersIn = [], ridersOut = [] } = transfer;
+  const ridersIn = Array.isArray(transfer?.ridersIn) ? transfer.ridersIn : [];
+  const ridersOut = Array.isArray(transfer?.ridersOut) ? transfer.ridersOut : [];
+
+  if (!ridersIn.length || !ridersOut.length) {
+    errors.push("Transfer must include at least one rider in and out.");
+  }
 
   if (ridersIn.length !== ridersOut.length) {
     errors.push("Transfers must swap the same number of riders in and out.");
