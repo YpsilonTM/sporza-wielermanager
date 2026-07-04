@@ -13,8 +13,8 @@
 {#if overview && ui}
 	<div class="card mb-4 flex flex-wrap gap-x-6 gap-y-3">
 		<div>
-			<p class="text-[0.68rem] font-semibold uppercase tracking-wider text-slate-500">Sporza</p>
-			<p class="text-sm font-semibold text-slate-100">
+			<p class="label-caps">Sporza</p>
+			<p class="text-sm font-semibold text-zinc-100">
 				{#if overview.auth.valid}
 					<span class="badge-ok">ingelogd</span>
 				{:else}
@@ -23,12 +23,12 @@
 			</p>
 		</div>
 		<div>
-			<p class="text-[0.68rem] font-semibold uppercase tracking-wider text-slate-500">Speler</p>
-			<p class="text-sm font-semibold text-slate-100">{gs?.user?.name ?? '—'}</p>
+			<p class="label-caps">Speler</p>
+			<p class="text-sm font-semibold text-zinc-100">{gs?.user?.name ?? '—'}</p>
 		</div>
 		<div>
-			<p class="text-[0.68rem] font-semibold uppercase tracking-wider text-slate-500">Ploeg</p>
-			<p class="text-sm font-semibold text-slate-100">
+			<p class="label-caps">Ploeg</p>
+			<p class="text-sm font-semibold text-zinc-100">
 				{ui.rosterCount}/{ui.squadSize}
 				{#if ui.rosterComplete}
 					<span class="badge-ok">compleet</span>
@@ -39,13 +39,13 @@
 		</div>
 		{#if overview.transferState}
 			<div>
-				<p class="text-[0.68rem] font-semibold uppercase tracking-wider text-slate-500">Budget</p>
-				<p class="text-sm font-semibold text-slate-100">€{overview.transferState.remainingBudget}M</p>
+				<p class="label-caps">Budget</p>
+				<p class="text-sm font-semibold text-zinc-100">€{overview.transferState.remainingBudget}M</p>
 			</div>
 		{/if}
 		<div>
-			<p class="text-[0.68rem] font-semibold uppercase tracking-wider text-slate-500">Lineup</p>
-			<p class="text-sm font-semibold text-slate-100">
+			<p class="label-caps">Lineup</p>
+			<p class="text-sm font-semibold text-zinc-100">
 				{#if ui.lineupSubmitted}
 					<span class="badge-ok">ingediend</span>
 				{:else}
@@ -55,27 +55,27 @@
 		</div>
 		{#if ranking?.rank != null}
 			<div>
-				<p class="text-[0.68rem] font-semibold uppercase tracking-wider text-slate-500">Stand</p>
-				<p class="text-sm font-semibold text-slate-100">
+				<p class="label-caps">Stand</p>
+				<p class="text-sm font-semibold text-zinc-100">
 					#{ranking.rank}
 					{#if ranking.amountOfPlayers != null}
-						<span class="text-slate-400">/ {ranking.amountOfPlayers}</span>
+						<span class="text-zinc-500">/ {ranking.amountOfPlayers}</span>
 					{/if}
 				</p>
 			</div>
 		{/if}
 		{#if ranking?.overallScore != null}
 			<div>
-				<p class="text-[0.68rem] font-semibold uppercase tracking-wider text-slate-500">Punten</p>
-				<p class="text-sm font-semibold text-slate-100">{ranking.overallScore}</p>
+				<p class="label-caps">Punten</p>
+				<p class="text-sm font-semibold text-zinc-100">{ranking.overallScore}</p>
 			</div>
 		{/if}
 		{#if ranking?.lastMatchScore != null}
 			<div>
-				<p class="text-[0.68rem] font-semibold uppercase tracking-wider text-slate-500">Vorige rit</p>
-				<p class="text-sm font-semibold text-emerald-300">+{ranking.lastMatchScore} pt</p>
+				<p class="label-caps">Vorige rit</p>
+				<p class="text-sm font-semibold text-emerald-400">+{ranking.lastMatchScore} pt</p>
 				{#if ranking.lastMatchName}
-					<p class="text-[0.65rem] text-slate-500">{ranking.lastMatchName}</p>
+					<p class="meta-text">{ranking.lastMatchName}</p>
 				{/if}
 			</div>
 		{/if}
@@ -83,20 +83,18 @@
 
 	{#if rosterPreview.length > 0}
 		<div class="card mb-4">
-			<p class="mb-3 text-[0.68rem] font-semibold uppercase tracking-wider text-slate-500">
-				Jouw ploeg
-			</p>
+			<p class="label-caps mb-3">Jouw ploeg</p>
 			<ul class="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">
 				{#each rosterPreview as rider (rider.id)}
 					<li
-						class="flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-950/50 px-2 py-1.5"
+						class="surface-nested flex items-center gap-2 px-2 py-1.5"
 						title="{rider.name}{rider.team ? ` · ${rider.team}` : ''}"
 					>
 						<RiderAvatar jerseyUrl={rider.jerseyUrl} name={rider.name} size="sm" />
 						<div class="min-w-0">
-							<p class="truncate text-xs font-medium text-slate-200">{rider.name.split(' ').at(-1)}</p>
+							<p class="truncate text-xs font-medium text-zinc-200">{rider.name.split(' ').at(-1)}</p>
 							{#if rider.price != null}
-								<p class="text-[0.65rem] text-slate-500">€{rider.price}M</p>
+								<p class="meta-text">€{rider.price}M</p>
 							{/if}
 						</div>
 					</li>

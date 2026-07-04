@@ -41,14 +41,14 @@
 		onclick={handleBackdrop}
 	>
 		<div
-			class="card w-full max-w-md shadow-2xl"
+			class="card w-full max-w-md shadow-2xl shadow-black/50"
 			role="dialog"
 			aria-modal="true"
 			aria-labelledby="confirm-title"
 		>
-			<h2 id="confirm-title" class="text-lg font-semibold text-slate-100">{title}</h2>
+			<h2 id="confirm-title" class="text-lg font-semibold text-zinc-50">{title}</h2>
 			{#if description}
-				<p class="mt-2 text-sm leading-relaxed text-slate-400">{description}</p>
+				<p class="mt-2 whitespace-pre-line text-sm leading-relaxed text-zinc-400">{description}</p>
 			{/if}
 			<div class="mt-5 flex flex-wrap justify-end gap-2">
 				<button class="btn-secondary" type="button" disabled={busy} onclick={oncancel}>

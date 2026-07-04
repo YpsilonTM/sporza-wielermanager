@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { ChevronDown, Terminal } from '@lucide/svelte';
+	import type { ConnectionStatus } from '$lib/types/connection';
 	import type { SseEvent } from '$lib/types/sse';
 
 	const BACKGROUND_NOISE_PATTERNS = [
@@ -24,7 +26,7 @@
 
 	let {
 		logsUrl = '/api/logs',
-		connectionStatus = $bindable('Verbinden met log stream...'),
+		connectionStatus = $bindable<ConnectionStatus>('connecting'),
 		onManage = () => {},
 		onRoster = () => {},
 		onManageFailed = () => {},
@@ -32,7 +34,7 @@
 		onOverviewRefresh = () => {}
 	}: {
 		logsUrl?: string;
-		connectionStatus?: string;
+		connectionStatus?: ConnectionStatus;
 		onManage?: (data: Extract<SseEvent, { type: 'manage' }>) => void;
 		onRoster?: (data: Extract<SseEvent, { type: 'roster' }>) => void;
 		onManageFailed?: (data: Extract<SseEvent, { type: 'manage-failed' }>) => void;
@@ -74,13 +76,14 @@
 	);
 
 	onMount(() => {
+		connectionStatus = 'connecting';
 		const es = new EventSource(logsUrl);
 
 		es.onopen = () => {
-			connectionStatus = '🟢 Verbonden';
+			connectionStatus = 'connected';
 		};
 		es.onerror = () => {
-			connectionStatus = '🔴 Verbinding verbroken';
+			connectionStatus = 'disconnected';
 		};
 		es.onmessage = (e) => {
 			let data: SseEvent;
@@ -129,31 +132,32 @@
 	});
 </script>
 
-<details class="card mb-5 overflow-hidden p-0" bind:open={expanded}>
+<details class="card group mb-5 overflow-hidden p-0" bind:open={expanded}>
 	<summary
-		class="flex cursor-pointer select-none items-center justify-between gap-3 px-4 py-3 hover:bg-slate-800/40"
+		class="flex cursor-pointer select-none items-center justify-between gap-3 px-4 py-3 hover:bg-zinc-800/40"
 	>
-		<span class="text-sm font-semibold text-slate-200">Live logs</span>
-		<span class="text-xs text-slate-500">
+		<span class="text-sm font-semibold text-zinc-200">Live logs</span>
+		<span class="flex items-center gap-2 meta-text">
 			{visibleCount} {visibleCount === 1 ? 'regel' : 'regels'}
+			<ChevronDown class="size-4 text-zinc-500 transition group-open:rotate-180" />
 		</span>
 	</summary>
 
-	<div class="border-t border-slate-700/80 px-4 pb-4 pt-3">
+	<div class="border-t border-zinc-800/80 px-4 pb-4 pt-3">
 		<div class="mb-2 flex flex-wrap items-center justify-end gap-3">
-			<label class="flex cursor-pointer items-center gap-2 text-xs text-slate-400">
-				<input class="accent-emerald-500" type="checkbox" bind:checked={hideBackgroundNoise} />
+			<label class="flex cursor-pointer items-center gap-2 meta-text">
+				<input class="accent-zinc-400" type="checkbox" bind:checked={hideBackgroundNoise} />
 				Verberg achtergrondruis
 			</label>
 			<button class="btn-ghost !py-1 text-xs" type="button" onclick={clearLogs}>Wissen</button>
 		</div>
 		<div
-			class="max-h-56 overflow-y-auto rounded-lg border border-slate-700 bg-slate-950/80 p-3 font-mono text-xs leading-relaxed"
+			class="max-h-56 overflow-y-auto surface-nested bg-zinc-950/80 p-3 font-mono text-xs leading-relaxed"
 			bind:this={logBox}
 		>
 			{#each lines as line (line.id)}
 				<div
-					class="break-words py-0.5 {line.level === 20 ? 'text-slate-500' : 'text-slate-300'} {hideBackgroundNoise &&
+					class="break-words py-0.5 {line.level === 20 ? 'text-zinc-500' : 'text-zinc-300'} {hideBackgroundNoise &&
 					line.backgroundNoise
 						? 'hidden'
 						: ''}"
@@ -161,9 +165,12 @@
 					{line.message}
 				</div>
 			{:else}
-				<p class="font-sans text-sm text-slate-500">
-					Nog geen logs — ze verschijnen bij AI-acties of fouten.
-				</p>
+				<div class="empty-state !py-8">
+					<Terminal class="size-6 text-zinc-600" strokeWidth={1.5} />
+					<p class="font-sans text-sm text-zinc-500">
+						Nog geen logs — ze verschijnen bij AI-acties of fouten.
+					</p>
+				</div>
 			{/each}
 		</div>
 	</div>

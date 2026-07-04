@@ -8,6 +8,8 @@
 	import DecisionHistory from '$lib/components/DecisionHistory.svelte';
 	import SimulatePreview from '$lib/components/SimulatePreview.svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
+	import StatusPill from '$lib/components/StatusPill.svelte';
+	import { KeyRound } from '@lucide/svelte';
 	import { askConfirm, closeConfirm, createConfirmDialogState } from '$lib/confirm-dialog';
 	import {
 		applyPreviewEvent,
@@ -17,15 +19,16 @@
 	} from '$lib/dashboard-jobs.svelte';
 	import { dashboardFetch, dashboardLogsUrl } from '$lib/dashboard-api';
 	import type { OverviewData } from '$lib/types/overview';
+	import type { SseEvent } from '$lib/types/sse';
 	import type LogPanelComponent from '$lib/components/LogPanel.svelte';
 	import type DecisionHistoryComponent from '$lib/components/DecisionHistory.svelte';
-	import type { SseEvent } from '$lib/types/sse';
+	import type { ConnectionStatus } from '$lib/types/connection';
 
 	let { data } = $props();
 
 	const autoManageWindowMs = $derived(data.autoManageWindowMs);
 
-	let connectionStatus = $state('Verbinden met log stream...');
+	let connectionStatus = $state<ConnectionStatus>('connecting');
 	let authBusy = $state(false);
 	let overview = $state<OverviewData | null>(null);
 	let overviewLoading = $state(true);
@@ -251,10 +254,10 @@
 	});
 </script>
 
-<header class="mb-6 flex flex-wrap items-start justify-between gap-4">
+<header class="mb-6 flex flex-wrap items-start justify-between gap-4 border-b border-zinc-800/60 pb-6">
 	<div>
-		<h1 class="text-2xl font-bold tracking-tight text-white">🚴 Sporza Wielermanager</h1>
-		<p class="mt-1 text-sm text-slate-400">
+		<h1 class="text-2xl font-semibold tracking-tight text-zinc-50">Sporza Wielermanager</h1>
+		<p class="mt-1 text-sm text-zinc-500">
 			Auto-manage {Math.round(autoManageWindowMs / 60_000)} min voor elke deadline
 		</p>
 	</div>
@@ -265,14 +268,41 @@
 			disabled={authBusy || overview?.auth?.canRefresh === false}
 			onclick={triggerAuthRefresh}
 		>
-			🔑 Auth
+			<KeyRound class="size-4" />
+			Auth
 		</button>
-		<span class="text-xs text-slate-500">{connectionStatus}</span>
+		<StatusPill status={connectionStatus} />
 	</div>
 </header>
 
 {#if overviewLoading && !overview}
-	<p class="text-sm text-slate-400">Laden…</p>
+	<div class="space-y-4" aria-busy="true" aria-label="Dashboard laden">
+		<div class="card flex flex-wrap gap-x-6 gap-y-3">
+			{#each [1, 2, 3, 4, 5] as i (i)}
+				<div class="space-y-2">
+					<div class="skeleton h-3 w-12"></div>
+					<div class="skeleton h-4 w-20"></div>
+				</div>
+			{/each}
+		</div>
+		<div class="card flex gap-3">
+			<div class="skeleton size-7 rounded-full"></div>
+			<div class="flex-1 space-y-2">
+				<div class="skeleton h-4 w-24"></div>
+				<div class="skeleton h-3 w-32"></div>
+			</div>
+			<div class="skeleton size-7 rounded-full"></div>
+			<div class="flex-1 space-y-2">
+				<div class="skeleton h-4 w-20"></div>
+				<div class="skeleton h-3 w-28"></div>
+			</div>
+		</div>
+		<div class="card-hero p-4">
+			<div class="skeleton mb-2 h-3 w-20"></div>
+			<div class="skeleton mb-2 h-6 w-3/4"></div>
+			<div class="skeleton h-4 w-1/2"></div>
+		</div>
+	</div>
 {:else if overviewError}
 	<p class="text-sm text-red-400">{overviewError}</p>
 {:else if overview?.ui}

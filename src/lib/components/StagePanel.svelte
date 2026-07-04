@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
+	import { ClipboardList } from '@lucide/svelte';
 	import LineupRiderRow from '$lib/components/LineupRiderRow.svelte';
 	import type { EnrichedStage, LineupView } from '$lib/types/overview';
 
@@ -42,20 +43,18 @@
 </script>
 
 {#if stage}
-	<section
-		class="card mb-4 overflow-hidden bg-gradient-to-br from-slate-900 to-slate-950 p-0"
-	>
-		<div class="flex flex-col gap-4 p-4 sm:flex-row sm:items-start sm:justify-between">
+	<section class="card-hero mb-4 overflow-hidden">
+		<div class="flex flex-col gap-4 border-t border-zinc-700/50 p-4 sm:flex-row sm:items-start sm:justify-between">
 			<div class="min-w-0 flex-1">
-				<p class="mb-1 text-[0.68rem] font-semibold uppercase tracking-wider text-slate-500">
-					Volgende rit
-				</p>
-				<h2 class="text-xl font-bold leading-tight text-white">{stage.name}</h2>
-				<p class="mt-1 text-sm text-slate-400">
+				<p class="label-caps mb-1">Volgende rit</p>
+				<h2 class="text-xl font-bold leading-tight text-zinc-50">{stage.name}</h2>
+				<p class="mt-1 text-sm text-zinc-400">
 					{stage.terrainType ?? '—'} · {stage.matchType ?? 'rit'} · deadline {deadlineLabel}
 				</p>
 			</div>
-			<div class="flex shrink-0 flex-col items-start gap-2 sm:items-end">
+			<div
+				class="flex shrink-0 flex-col items-start gap-2 rounded-lg bg-zinc-950/50 px-3 py-2 ring-1 ring-zinc-800/80 sm:items-end"
+			>
 				<span class="text-2xl font-bold tabular-nums text-amber-400">
 					{formatCountdown(stage.minutesUntilDeadline)}
 				</span>
@@ -65,11 +64,9 @@
 			</div>
 		</div>
 		{#if stageProfileSrc}
-			<div class="border-t border-slate-800/80 bg-slate-950/50 px-4 py-3">
-				<p class="mb-2 text-[0.68rem] font-semibold uppercase tracking-wider text-slate-500">
-					Etappeprofiel
-				</p>
-				<div class="rounded-lg bg-slate-900/80 px-3 py-2 ring-1 ring-slate-800">
+			<div class="border-t border-zinc-800/80 bg-zinc-950/50 px-4 py-3">
+				<p class="label-caps mb-2">Etappeprofiel</p>
+				<div class="surface-nested bg-zinc-900/80 px-3 py-2">
 					<img
 						src={stageProfileSrc}
 						alt="Etappeprofiel {stage.name}"
@@ -85,14 +82,12 @@
 {#if lineup?.submitted}
 	<section class="card">
 		<div class="mb-4 flex flex-wrap items-center justify-between gap-2">
-			<h3 class="text-base font-semibold text-slate-100">Ingediende lineup</h3>
+			<h3 class="section-title">Ingediende lineup</h3>
 			<span class="chip chip-done">Actief bij Sporza</span>
 		</div>
 		<div class="grid gap-4 sm:grid-cols-2">
 			<div>
-				<h4 class="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
-					Starters ({lineup.starters.length})
-				</h4>
+				<h4 class="label-caps mb-2">Starters ({lineup.starters.length})</h4>
 				<ul class="space-y-1.5">
 					{#each lineup.starters as rider (rider.id)}
 						<LineupRiderRow {rider} highlightCaptain />
@@ -101,9 +96,7 @@
 			</div>
 			{#if lineup.bench.length > 0}
 				<div>
-					<h4 class="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
-						Bank ({lineup.bench.length})
-					</h4>
+					<h4 class="label-caps mb-2">Bank ({lineup.bench.length})</h4>
 					<ul class="space-y-1.5">
 						{#each lineup.bench as rider (rider.id)}
 							<LineupRiderRow {rider} muted />
@@ -114,8 +107,13 @@
 		</div>
 	</section>
 {:else if stage}
-	<section class="card border-dashed">
-		<h3 class="text-base font-semibold text-slate-100">Lineup</h3>
-		<p class="mt-1 text-sm text-slate-400">Nog geen lineup ingediend voor deze rit.</p>
+	<section class="card-muted">
+		<div class="empty-state !py-4">
+			<ClipboardList class="size-8 text-zinc-600" strokeWidth={1.5} />
+			<div>
+				<h3 class="section-title">Lineup</h3>
+				<p class="mt-1 text-sm text-zinc-500">Nog geen lineup ingediend voor deze rit.</p>
+			</div>
+		</div>
 	</section>
 {/if}

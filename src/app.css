@@ -2,13 +2,21 @@
 
 @theme {
 	--font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
-	--color-brand: #22c55e;
-	--color-brand-dark: #052e16;
+	--color-surface: #09090b;
+	--color-surface-elevated: #18181b;
+	--color-surface-muted: #0a0a0c;
+	--color-border: #27272a;
+	--color-border-subtle: #3f3f46;
+	--color-accent: #fafafa;
+	--color-accent-muted: #a1a1aa;
+	--color-success: #22c55e;
+	--color-warning: #fbbf24;
 }
 
 @layer base {
 	body {
-		@apply min-h-screen bg-slate-950 font-sans text-slate-100 antialiased;
+		@apply min-h-screen bg-zinc-950 font-sans text-zinc-100 antialiased;
+		background-image: radial-gradient(ellipse 80% 50% at 50% -20%, rgb(39 39 42 / 0.25), transparent);
 	}
 
 	details > summary {
@@ -21,43 +29,116 @@
 }
 
 @layer components {
+	.label-caps {
+		@apply text-[0.68rem] font-semibold uppercase tracking-wider text-zinc-500;
+	}
+
+	.section-title {
+		@apply text-base font-semibold text-zinc-100;
+	}
+
+	.meta-text {
+		@apply text-xs text-zinc-500;
+	}
+
 	.chip {
 		@apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold;
 	}
 
 	.chip-auto {
-		@apply bg-emerald-950 text-emerald-300 ring-1 ring-emerald-800;
+		@apply bg-zinc-800 text-zinc-200 ring-1 ring-zinc-700;
 	}
 
 	.chip-done {
-		@apply bg-emerald-900/60 text-emerald-300 ring-1 ring-emerald-800;
+		@apply bg-zinc-800/80 text-zinc-200 ring-1 ring-zinc-700;
 	}
 
 	.badge-ok {
-		@apply ml-1.5 inline-flex rounded-full bg-emerald-900/70 px-2 py-0.5 text-[0.68rem] font-semibold text-emerald-300;
+		@apply ml-1.5 inline-flex items-center gap-1 rounded-full bg-zinc-700/80 px-2 py-0.5 text-[0.68rem] font-semibold text-zinc-200;
+	}
+
+	.badge-ok::before {
+		content: '';
+		@apply size-1.5 shrink-0 rounded-full bg-emerald-500;
 	}
 
 	.badge-warn {
-		@apply ml-1.5 inline-flex rounded-full bg-amber-950/80 px-2 py-0.5 text-[0.68rem] font-semibold text-amber-200;
+		@apply ml-1.5 inline-flex rounded-full bg-amber-950/70 px-2 py-0.5 text-[0.68rem] font-semibold text-amber-200 ring-1 ring-amber-900/50;
 	}
 
 	.btn-primary {
-		@apply inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-emerald-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-40;
+		@apply inline-flex items-center justify-center gap-2 rounded-lg bg-zinc-100 px-4 py-2.5 text-sm font-semibold text-zinc-950 shadow-sm shadow-black/20 transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/40 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40;
 	}
 
 	.btn-secondary {
-		@apply inline-flex items-center justify-center gap-2 rounded-lg bg-slate-700 px-3 py-2 text-sm font-medium text-slate-100 transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-40;
+		@apply inline-flex items-center justify-center gap-2 rounded-lg bg-zinc-800 px-3 py-2 text-sm font-medium text-zinc-100 ring-1 ring-zinc-700 transition hover:bg-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/40 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40;
 	}
 
 	.btn-ghost {
-		@apply inline-flex items-center rounded-lg border border-slate-600 bg-transparent px-3 py-1.5 text-sm font-medium text-slate-300 transition hover:border-slate-500 hover:bg-slate-800 hover:text-slate-100;
+		@apply inline-flex items-center rounded-lg border border-zinc-700 bg-transparent px-3 py-1.5 text-sm font-medium text-zinc-400 transition hover:border-zinc-600 hover:bg-zinc-800/80 hover:text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/40 active:scale-[0.98];
+	}
+
+	.btn-icon {
+		@apply inline-flex size-8 items-center justify-center rounded-lg border border-zinc-700 bg-transparent text-zinc-400 transition hover:border-zinc-600 hover:bg-zinc-800/80 hover:text-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400/40 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40;
 	}
 
 	.card {
-		@apply rounded-xl border border-slate-700/80 bg-slate-900/70 p-4 shadow-lg shadow-black/20 backdrop-blur-sm;
+		@apply rounded-xl border border-zinc-800/80 bg-zinc-900/60 p-4 shadow-lg shadow-black/25 backdrop-blur-sm;
+	}
+
+	.card-hero {
+		@apply rounded-xl border border-zinc-800/80 bg-gradient-to-br from-zinc-900/80 to-zinc-950/90 p-0 shadow-xl shadow-black/30 backdrop-blur-sm;
+	}
+
+	.card-muted {
+		@apply rounded-xl border border-dashed border-zinc-700/80 bg-zinc-950/40 p-4;
+	}
+
+	.surface-nested {
+		@apply rounded-lg border border-zinc-800/80 bg-zinc-950/40;
+	}
+
+	.skeleton {
+		@apply animate-pulse rounded-lg bg-zinc-800/60;
+	}
+
+	.status-pill {
+		@apply inline-flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-900/80 px-2.5 py-1 text-xs font-medium text-zinc-400;
+	}
+
+	.status-dot {
+		@apply size-1.5 shrink-0 rounded-full;
+	}
+
+	.status-dot-connected {
+		@apply bg-emerald-500;
+		animation: status-pulse 2s ease-in-out infinite;
+	}
+
+	.status-dot-connecting {
+		@apply bg-amber-400;
+		animation: status-pulse 1.5s ease-in-out infinite;
+	}
+
+	.status-dot-disconnected {
+		@apply bg-red-500;
 	}
 
 	.spinner {
-		@apply size-4 shrink-0 animate-spin rounded-full border-2 border-white/25 border-t-white;
+		@apply size-4 shrink-0 animate-spin rounded-full border-2 border-zinc-950/25 border-t-zinc-950;
+	}
+
+	.empty-state {
+		@apply flex flex-col items-center gap-2 py-6 text-center;
+	}
+}
+
+@keyframes status-pulse {
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.45;
 	}
 }

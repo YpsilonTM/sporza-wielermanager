@@ -19,19 +19,19 @@
 <li
 	class="flex items-center gap-3 rounded-lg border px-3 py-2 text-sm
 		{highlightCaptain && isCaptain
-		? 'border-emerald-600/60 bg-emerald-950/40'
-		: 'border-slate-700 bg-slate-950/60'}"
+		? 'border-l-2 border-l-zinc-300 border-zinc-700 bg-zinc-900/80'
+		: 'surface-nested'}"
 >
 	<RiderAvatar jerseyUrl={rider.jerseyUrl} name={rider.name} size="sm" />
 	<div class="min-w-0 flex-1">
-		<p class="truncate font-medium {muted ? 'text-slate-300' : 'text-slate-100'}">{rider.name}</p>
+		<p class="truncate font-medium {muted ? 'text-zinc-400' : 'text-zinc-100'}">{rider.name}</p>
 		{#if rider.teamShortName || rider.team}
-			<p class="truncate text-xs text-slate-500">{rider.teamShortName ?? rider.team}</p>
+			<p class="truncate meta-text">{rider.teamShortName ?? rider.team}</p>
 		{/if}
 	</div>
 	<span
 		class="shrink-0 text-xs font-semibold
-			{isCaptain ? 'text-emerald-300' : muted ? 'text-slate-500' : 'text-slate-400'}"
+			{isCaptain ? 'text-zinc-200' : muted ? 'text-zinc-500' : 'text-zinc-400'}"
 	>
 		{formatRoleLabel(rider.role)}
 	</span>

@@ -17,12 +17,12 @@
 	<img
 		src={jerseyUrl}
 		alt=""
-		class="{sizeClass} shrink-0 rounded-md bg-white/90 object-contain p-0.5 ring-1 ring-slate-600/60"
+		class="{sizeClass} shrink-0 rounded-md bg-white/90 object-contain p-0.5 ring-1 ring-zinc-700/50"
 		loading="lazy"
 	/>
 {:else}
 	<span
-		class="{sizeClass} flex shrink-0 items-center justify-center rounded-md bg-slate-800 text-xs font-bold text-slate-400 ring-1 ring-slate-600/60"
+		class="{sizeClass} flex shrink-0 items-center justify-center rounded-md bg-zinc-800 text-xs font-bold text-zinc-400 ring-1 ring-zinc-700/50"
 		aria-hidden="true"
 	>
 		{initial}
