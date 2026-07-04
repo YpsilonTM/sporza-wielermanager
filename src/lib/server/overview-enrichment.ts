@@ -8,6 +8,7 @@ interface RawMatch {
 	terrainType?: string;
 	deadline?: string;
 	startTime?: string;
+	stageProfileUrl?: string;
 }
 
 export function enrichStageForUi(match: RawMatch | null | undefined, rosterSize: number): EnrichedStage | null {
@@ -29,6 +30,7 @@ export function enrichStageForUi(match: RawMatch | null | undefined, rosterSize:
 		terrainType: match.terrainType,
 		deadline: match.deadline,
 		startTime: match.startTime,
+		stageProfileUrl: match.stageProfileUrl,
 		minutesUntilDeadline: Math.max(0, Math.floor(msUntil / 60_000)),
 		autoManageScheduled: inAutoWindow,
 		autoManageAt,

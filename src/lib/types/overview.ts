@@ -5,6 +5,7 @@ export interface EnrichedStage {
 	terrainType?: string;
 	deadline?: string;
 	startTime?: string;
+	stageProfileUrl?: string;
 	minutesUntilDeadline: number;
 	autoManageScheduled: boolean;
 	autoManageAt?: string;
@@ -16,6 +17,18 @@ export interface LineupRiderView {
 	name: string;
 	role?: string;
 	team?: string;
+	teamShortName?: string;
+	jerseyUrl?: string;
+	price?: number;
+}
+
+export interface RosterRiderView {
+	id: number;
+	name: string;
+	team?: string;
+	teamShortName?: string;
+	jerseyUrl?: string;
+	price?: number;
 }
 
 export interface LineupView {
@@ -69,6 +82,7 @@ export interface OverviewData {
 	gameRules: Record<string, unknown> | null;
 	upcomingMatch: EnrichedStage | null;
 	upcomingLineup: LineupView | null;
+	rosterPreview: RosterRiderView[];
 	transferState: TransferStateView | null;
 	ui: OverviewUiState;
 }

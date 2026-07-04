@@ -22,10 +22,11 @@ import {
 	isManageInFlight
 } from './app-state';
 import { enrichStageForUi } from './overview-enrichment';
-import { buildOverviewUi, mapLineupView } from './overview-ui';
+import { buildOverviewUi, mapLineupView, mapRosterView } from './overview-ui';
 import { AUTO_MANAGE_WINDOW_MS } from './config.js';
 import type { OverviewData } from '$lib/types/overview';
 import { prisma } from './db';
+import { normalizeConfidence } from './confidence';
 
 const OVERVIEW_CACHE_TTL_MS = 5 * 60 * 1000;
 
@@ -35,7 +36,9 @@ function formatDecisionReasoning(decision: {
 } | null | undefined): string {
 	if (!decision) return '';
 	const fromLineup = (decision.lineup || []).map((entry) => entry.reasoning).filter(Boolean);
-	const fromPicks = (decision.picks || []).map((entry) => entry.reasoning).filter(Boolean);
+	const fromPicks = (Array.isArray(decision.picks) ? decision.picks : [])
+		.map((entry) => entry.reasoning)
+		.filter(Boolean);
 	return [...fromLineup, ...fromPicks].join(' ');
 }
 
@@ -113,6 +116,7 @@ export async function fetchOverviewData(): Promise<OverviewData> {
 		gameRules: overview.gameRules,
 		upcomingMatch: enriched,
 		upcomingLineup: mappedLineup,
+		rosterPreview: mapRosterView(roster),
 		transferState
 	};
 
@@ -127,7 +131,7 @@ export async function persistDecision(entry: {
 	matchName?: string;
 	decisionType: string;
 	summary: string;
-	confidence?: number;
+	confidence?: number | string;
 	reasoning?: string;
 	submitted: boolean;
 }): Promise<void> {
@@ -137,7 +141,7 @@ export async function persistDecision(entry: {
 			matchName: entry.matchName ?? null,
 			decisionType: entry.decisionType,
 			summary: entry.summary,
-			confidence: entry.confidence ?? null,
+			confidence: normalizeConfidence(entry.confidence),
 			reasoning: entry.reasoning || '',
 			submitted: entry.submitted
 		}

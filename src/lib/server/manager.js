@@ -127,7 +127,9 @@ export async function runRosterBuilder({
   onLog(`Budget: €${validation.totalBudget}M / €${context.gameRules?.budget ?? 100}M`);
 
   for (const cyclist of validation.roster) {
-    const pick = decision.picks?.find((entry) => entry.cyclistId === cyclist.id);
+    const pick = (Array.isArray(decision.picks) ? decision.picks : []).find(
+      (entry) => entry.cyclistId === cyclist.id
+    );
     onLog(`  ${formatCyclistLabel(cyclist)}${pick?.reasoning ? ` — ${pick.reasoning}` : ""}`);
   }
 
@@ -224,7 +226,9 @@ async function runPreRaceSquadReview({
 
   for (const cyclist of validation.roster) {
     if (inIds.includes(cyclist.id)) {
-      const pick = decision.picks?.find((entry) => entry.cyclistId === cyclist.id);
+      const pick = (Array.isArray(decision.picks) ? decision.picks : []).find(
+        (entry) => entry.cyclistId === cyclist.id
+      );
       onLog(`  + ${formatCyclistLabel(cyclist)}${pick?.reasoning ? ` — ${pick.reasoning}` : ""}`);
     }
   }

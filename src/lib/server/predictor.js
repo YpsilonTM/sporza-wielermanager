@@ -330,6 +330,18 @@ function needsEscalation(decision) {
   return /onduidelijk|onbekend|moeilijk|twijfel|uncertain|unclear/.test(combined);
 }
 
+function asPickList(picks) {
+  return Array.isArray(picks) ? picks : [];
+}
+
+function normalizeRosterDecision(decision) {
+  if (!decision || typeof decision !== "object") {
+    return decision;
+  }
+  decision.picks = asPickList(decision.picks);
+  return decision;
+}
+
 function needsRosterEscalation(decision, gameRules) {
   if (decision.confidence === "low") {
     return true;
@@ -338,7 +350,7 @@ function needsRosterEscalation(decision, gameRules) {
   if (!Array.isArray(decision.cyclistIds) || decision.cyclistIds.length !== squadSize) {
     return true;
   }
-  const combined = `${decision.summary} ${(decision.picks || []).map((p) => p.reasoning).join(" ")}`.toLowerCase();
+  const combined = `${decision.summary} ${asPickList(decision.picks).map((p) => p.reasoning).join(" ")}`.toLowerCase();
   return /onduidelijk|onbekend|moeilijk|twijfel|uncertain|unclear/.test(combined);
 }
 
@@ -381,9 +393,9 @@ export async function predictRosterDecision(apiKey, context, options = {}) {
     let rawText = await generateRosterDecision(ai, model, prompt, onDebug);
     let decision;
     try {
-      decision = tryParseDecision(rawText);
+      decision = normalizeRosterDecision(tryParseDecision(rawText));
     } catch {
-      decision = await repairRosterDecision(ai, rawText);
+      decision = normalizeRosterDecision(await repairRosterDecision(ai, rawText));
     }
 
     if (needsRosterEscalation(decision, context.gameRules)) {
@@ -394,15 +406,15 @@ export async function predictRosterDecision(apiKey, context, options = {}) {
 Extra: vorige poging was onvolledig of onzeker. Lever exact ${getSquadSize(context.gameRules)} geldige cyclistIds die alle regels respecteren.`;
       rawText = await generateRosterDecision(ai, model, escalationPrompt, onDebug);
       try {
-        decision = tryParseDecision(rawText);
+        decision = normalizeRosterDecision(tryParseDecision(rawText));
       } catch {
-        decision = await repairRosterDecision(ai, rawText);
+        decision = normalizeRosterDecision(await repairRosterDecision(ai, rawText));
       }
       decision.escalated = true;
     }
 
     decision.model = model;
-    return decision;
+    return normalizeRosterDecision(decision);
   } catch (error) {
     onDebug(`Roster prediction failed: ${error instanceof Error ? error.message : String(error)}`);
     return null;

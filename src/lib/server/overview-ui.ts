@@ -5,21 +5,40 @@ import {
 	isPreRaceSquadWindow,
 	minutesUntilMatch
 } from './transfers.js';
-import type { OverviewData, LineupRiderView, OverviewUiState } from '$lib/types/overview';
+import type { OverviewData, LineupRiderView, OverviewUiState, RosterRiderView } from '$lib/types/overview';
 
 function riderLabel(cyclist: {
 	id: number;
 	firstName?: string;
 	lastName?: string;
 	lineupType?: string;
-	team?: { name?: string };
+	price?: number;
+	team?: { name?: string; shortName?: string; jerseyUrl?: string };
 }): LineupRiderView {
 	return {
 		id: cyclist.id,
 		name: `${cyclist.firstName ?? ''} ${cyclist.lastName ?? ''}`.trim() || `#${cyclist.id}`,
 		role: cyclist.lineupType,
-		team: cyclist.team?.name
+		team: cyclist.team?.name,
+		teamShortName: cyclist.team?.shortName,
+		jerseyUrl: cyclist.team?.jerseyUrl,
+		price: cyclist.price
 	};
+}
+
+export function mapRosterView(roster: unknown[]): RosterRiderView[] {
+	return (roster ?? []).map((entry) => {
+		const cyclist = entry as Parameters<typeof riderLabel>[0];
+		const mapped = riderLabel(cyclist);
+		return {
+			id: mapped.id,
+			name: mapped.name,
+			team: mapped.team,
+			teamShortName: mapped.teamShortName,
+			jerseyUrl: mapped.jerseyUrl,
+			price: mapped.price
+		};
+	});
 }
 
 export function mapLineupView(raw: {
