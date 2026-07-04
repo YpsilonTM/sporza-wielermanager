@@ -72,18 +72,6 @@ export class WielermanagerApiClient {
     );
   }
 
-  async fillRoster(cookies, cyclistIds) {
-    return this.#postAction(
-      cookies,
-      "cyclists",
-      {
-        action: "FILL_ROSTER",
-        cyclistIds
-      },
-      "FILL_ROSTER"
-    );
-  }
-
   async saveLineup(cookies, matchId, lineup) {
     return this.#postAction(
       cookies,

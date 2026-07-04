@@ -20,7 +20,8 @@ import {
   validateTransfer
 } from "./transfers.js";
 import { buildFallbackRoster } from "./roster-fallback.js";
-import { logManagerDecision } from "./manager-log.js";
+import { formatRiderName } from "./format.js";
+import { getUpcomingMatch } from "./format.js";
 
 function resolveCookiesAccessor({ cookies, getCookies }) {
   if (typeof getCookies === "function") {
@@ -33,10 +34,7 @@ export async function buildManagerContext(api, cookies, decodeTurboStream, extra
   const overview = await api.fetchEditionOverview(cookies, decodeTurboStream, extractEditionRouteLoader);
   const cyclistsPayload = await api.fetchCyclists();
 
-  const match =
-    overview.edition?.upcomingCyclingMatch ??
-    overview.gameStatus?.nextMatch?.match ??
-    null;
+  const match = getUpcomingMatch(overview);
 
   return {
     overview,
@@ -50,7 +48,7 @@ export async function buildManagerContext(api, cookies, decodeTurboStream, extra
 }
 
 function formatCyclistLabel(cyclist) {
-  return `#${cyclist.id} ${cyclist.firstName} ${cyclist.lastName} (€${cyclist.price}M, ${cyclist.team?.name ?? "?"})`;
+  return formatRiderName(cyclist, { includeId: true, includePrice: true, includeTeam: true });
 }
 
 export async function runRosterBuilder({
@@ -141,16 +139,6 @@ export async function runRosterBuilder({
     onLog("Dry-run — ploeg niet ingediend.");
   }
 
-  await logManagerDecision(settings, {
-    edition: settings.editionSlug,
-    type: "roster",
-    decision,
-    cyclistIds,
-    totalBudget: validation.totalBudget,
-    dryRun,
-    submitted: submit
-  });
-
   return {
     context,
     decision,
@@ -239,19 +227,6 @@ async function runPreRaceSquadReview({
   } else {
     onLog("Dry-run — ploeg niet aangepast.");
   }
-
-  await logManagerDecision(settings, {
-    edition: settings.editionSlug,
-    type: "pre-race-roster",
-    matchId: context.match?.id,
-    matchName: context.match?.name,
-    decision,
-    cyclistIds: validation.roster.map((c) => c.id),
-    ridersOut: outIds,
-    ridersIn: inIds,
-    dryRun: !submit,
-    submitted: submit
-  });
 
   return {
     roster: validation.roster,
@@ -475,15 +450,6 @@ export async function runManager({
     onLog("Dry-run — lineup niet ingediend.");
   }
 
-  await logManagerDecision(settings, {
-    edition: settings.editionSlug,
-    matchId: context.match.id,
-    matchName: context.match.name,
-    decision,
-    dryRun,
-    submitted: submit
-  });
-
   return {
     context,
     decision,
@@ -492,4 +458,77 @@ export async function runManager({
     currentLineup,
     submitted: submit
   };
+}
+
+export async function submitRosterFromPreview({
+  api,
+  getCookies,
+  decodeTurboStream,
+  extractEditionRouteLoader,
+  cyclistIds,
+  onLog = () => {}
+}) {
+  const context = await buildManagerContext(
+    api,
+    getCookies(),
+    decodeTurboStream,
+    extractEditionRouteLoader
+  );
+  const validation = validateRosterIds(cyclistIds, context.allCyclists, context.gameRules);
+  if (!validation.valid) {
+    throw new Error(`Ongeldige ploeg: ${validation.errors.join("; ")}`);
+  }
+
+  onLog("Simulatie indienen — ploeg opslaan bij Sporza...");
+  await api.saveRoster(getCookies(), cyclistIds);
+}
+
+export async function submitLineupWithOptionalTransfer({
+  api,
+  getCookies,
+  decodeTurboStream,
+  extractEditionRouteLoader,
+  payload,
+  allowTransfers = false,
+  onLog = () => {}
+}) {
+  const context = await buildManagerContext(
+    api,
+    getCookies(),
+    decodeTurboStream,
+    extractEditionRouteLoader
+  );
+
+  let roster = context.roster ?? [];
+  const transferState = await api.fetchTransferState(getCookies());
+  const transfersOpen = areTransfersOpen(context.gameStatus, context.overview?.edition);
+
+  if (payload.transfer && transfersOpen) {
+    if (!allowTransfers) {
+      onLog("Transfer uit simulatie overgeslagen — niet ingeschakeld.", "warn");
+    } else {
+      const transferResult = validateTransfer(
+        payload.transfer,
+        roster,
+        context.allCyclists,
+        context.gameRules,
+        transferState.usedTransfers
+      );
+      if (!transferResult.valid) {
+        throw new Error(`Transfer ongeldig: ${transferResult.errors.join("; ")}`);
+      }
+      onLog("Transfer uit simulatie indienen...");
+      await api.createTransfer(getCookies(), payload.transfer.ridersIn, payload.transfer.ridersOut);
+      roster = transferResult.nextRoster;
+      onLog("Transfer uitgevoerd.");
+    }
+  }
+
+  const lineupValidation = validateLineup(payload.lineup, roster, context.gameRules);
+  if (!lineupValidation.valid) {
+    throw new Error(`Ongeldige lineup: ${lineupValidation.errors.join("; ")}`);
+  }
+
+  onLog(`Simulatie indienen — lineup opslaan voor ${payload.matchName ?? payload.matchId}...`);
+  await api.saveLineup(getCookies(), payload.matchId, lineupToApiPayload(payload.lineup));
 }

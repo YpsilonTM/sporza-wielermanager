@@ -5,6 +5,7 @@ import {
 	isPreRaceSquadWindow,
 	minutesUntilMatch
 } from './transfers.js';
+import { formatRiderName } from '$lib/format';
 import type { OverviewData, LineupRiderView, OverviewUiState, RosterRiderView } from '$lib/types/overview';
 
 function riderLabel(cyclist: {
@@ -17,7 +18,7 @@ function riderLabel(cyclist: {
 }): LineupRiderView {
 	return {
 		id: cyclist.id,
-		name: `${cyclist.firstName ?? ''} ${cyclist.lastName ?? ''}`.trim() || `#${cyclist.id}`,
+		name: formatRiderName(cyclist),
 		role: cyclist.lineupType,
 		team: cyclist.team?.name,
 		teamShortName: cyclist.team?.shortName,
@@ -56,7 +57,7 @@ export function buildOverviewUi(data: Omit<OverviewData, 'ui'>): OverviewUiState
 	const squadSize = getSquadSize(data.gameRules ?? {});
 	const roster = data.gameStatus?.roster ?? [];
 	const rosterCount = roster.length;
-	const rosterComplete = rosterIsComplete(roster, data.gameRules ?? {});
+	const rosterComplete = rosterIsComplete(roster as Parameters<typeof rosterIsComplete>[0], data.gameRules ?? {});
 	const preRaceSquadWindow = isPreRaceSquadWindow(
 		data.gameStatus ?? {},
 		data.edition ?? undefined

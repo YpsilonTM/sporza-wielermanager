@@ -103,36 +103,6 @@ export const CyclistsResponseSchema = z.object({
     .optional()
 });
 
-export const LineupEntrySchema = z.object({
-  id: z.number(),
-  lineupType: z.enum(["CAPTAIN", "NORMAL", "SUBSTITUTE"])
-});
-
-export const ManagerDecisionSchema = z.object({
-  lineup: z.array(
-    z.object({
-      cyclistId: z.number(),
-      lineupType: z.enum(["CAPTAIN", "NORMAL", "SUBSTITUTE"]),
-      reasoning: z.string().optional()
-    })
-  ),
-  transfers: z
-    .array(
-      z.object({
-        ridersIn: z.array(z.number()),
-        ridersOut: z.array(z.number()),
-        reasoning: z.string().optional()
-      })
-    )
-    .optional(),
-  confidence: z.enum(["high", "medium", "low"]),
-  summary: z.string().optional()
-});
-
 export function parseCyclistsResponse(payload) {
   return CyclistsResponseSchema.parse(payload);
-}
-
-export function parseGameStatus(payload) {
-  return GameStatusSchema.parse(payload);
 }

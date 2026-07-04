@@ -9,17 +9,7 @@ import type {
 } from '$lib/types/preview';
 import type { LineupRiderView, LineupView } from '$lib/types/overview';
 
-function riderName(cyclist: { firstName?: string; lastName?: string; id?: number } | undefined): string {
-	if (!cyclist) return 'Onbekende renner';
-	return `${cyclist.firstName ?? ''} ${cyclist.lastName ?? ''}`.trim() || `#${cyclist.id}`;
-}
-
-function roleLabel(role?: string): string {
-	if (role === 'CAPTAIN') return 'Kapitein';
-	if (role === 'SUBSTITUTE') return 'Bank';
-	if (role === 'NORMAL') return 'Starter';
-	return '—';
-}
+import { formatRiderName, formatRoleLabel } from '$lib/format';
 
 function lineupFromDecision(
 	lineup: Array<{ cyclistId: number; lineupType: string }>,
@@ -77,8 +67,8 @@ export function computeLineupChanges(
 		changes.push({
 			id,
 			name,
-			from: fromRole ? roleLabel(fromRole) : undefined,
-			to: toRole ? roleLabel(toRole) : undefined,
+			from: fromRole ? formatRoleLabel(fromRole) : undefined,
+			to: toRole ? formatRoleLabel(toRole) : undefined,
 			change
 		});
 	}
@@ -102,8 +92,8 @@ export function buildTransferPreview(
 	const byId = new Map(allCyclists.map((cyclist) => [cyclist.id, cyclist]));
 
 	return {
-		ridersOut: transfer.ridersOut.map((id) => ({ id, name: riderName(byId.get(id)) })),
-		ridersIn: transfer.ridersIn.map((id) => ({ id, name: riderName(byId.get(id)) })),
+		ridersOut: transfer.ridersOut.map((id) => ({ id, name: formatRiderName(byId.get(id)) })),
+		ridersIn: transfer.ridersIn.map((id) => ({ id, name: formatRiderName(byId.get(id)) })),
 		cost: transferResult.transferCost ?? 0,
 		reasoning: transfer.reasoning,
 		executed
@@ -149,7 +139,7 @@ export function buildRosterPreview(result: {
 		const cyclist = byId.get(id);
 		return {
 			id,
-			name: riderName(cyclist),
+			name: formatRiderName(cyclist),
 			jerseyUrl: cyclist?.team?.jerseyUrl,
 			team: cyclist?.team?.shortName ?? cyclist?.team?.name,
 			price: cyclist?.price

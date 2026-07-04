@@ -1,8 +1,6 @@
-const CONFIDENCE_LEVELS: Record<string, number> = {
-	high: 0.9,
-	medium: 0.6,
-	low: 0.3
-};
+import { CONFIDENCE_VALUES } from '$lib/confidence';
+
+const CONFIDENCE_LEVELS: Record<string, number> = { ...CONFIDENCE_VALUES };
 
 /** Map AI confidence labels to a 0–1 float for Prisma storage. */
 export function normalizeConfidence(value: unknown): number | null {

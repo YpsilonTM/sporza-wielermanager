@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
-	import RiderAvatar from '$lib/components/RiderAvatar.svelte';
+	import LineupRiderRow from '$lib/components/LineupRiderRow.svelte';
 	import type { EnrichedStage, LineupView } from '$lib/types/overview';
 
 	function formatCountdown(minutes: number): string {
@@ -12,12 +12,6 @@
 		if (minutes >= 60) return '1 uur';
 		if (minutes <= 0) return 'Binnenkort';
 		return `${minutes} min`;
-	}
-
-	function roleLabel(role?: string): string {
-		if (role === 'CAPTAIN') return 'Kapitein';
-		if (role === 'SUBSTITUTE') return 'Bank';
-		return 'Starter';
 	}
 
 	let {
@@ -101,28 +95,7 @@
 				</h4>
 				<ul class="space-y-1.5">
 					{#each lineup.starters as rider (rider.id)}
-						<li
-							class="flex items-center gap-3 rounded-lg border px-3 py-2 text-sm
-								{rider.role === 'CAPTAIN'
-								? 'border-emerald-600/60 bg-emerald-950/40'
-								: 'border-slate-700 bg-slate-950/60'}"
-						>
-							<RiderAvatar jerseyUrl={rider.jerseyUrl} name={rider.name} size="sm" />
-							<div class="min-w-0 flex-1">
-								<p class="truncate font-medium text-slate-100">{rider.name}</p>
-								{#if rider.teamShortName || rider.team}
-									<p class="truncate text-xs text-slate-500">
-										{rider.teamShortName ?? rider.team}
-									</p>
-								{/if}
-							</div>
-							<span
-								class="shrink-0 text-xs font-semibold
-									{rider.role === 'CAPTAIN' ? 'text-emerald-300' : 'text-slate-400'}"
-							>
-								{roleLabel(rider.role)}
-							</span>
-						</li>
+						<LineupRiderRow {rider} highlightCaptain />
 					{/each}
 				</ul>
 			</div>
@@ -133,20 +106,7 @@
 					</h4>
 					<ul class="space-y-1.5">
 						{#each lineup.bench as rider (rider.id)}
-							<li
-								class="flex items-center gap-3 rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2 text-sm"
-							>
-								<RiderAvatar jerseyUrl={rider.jerseyUrl} name={rider.name} size="sm" />
-								<div class="min-w-0 flex-1">
-									<p class="truncate font-medium text-slate-300">{rider.name}</p>
-									{#if rider.teamShortName || rider.team}
-										<p class="truncate text-xs text-slate-500">
-											{rider.teamShortName ?? rider.team}
-										</p>
-									{/if}
-								</div>
-								<span class="shrink-0 text-xs font-semibold text-slate-500">Bank</span>
-							</li>
+							<LineupRiderRow {rider} muted />
 						{/each}
 					</ul>
 				</div>

@@ -9,16 +9,21 @@
 	import SimulatePreview from '$lib/components/SimulatePreview.svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import { askConfirm, closeConfirm, createConfirmDialogState } from '$lib/confirm-dialog';
+	import {
+		applyPreviewEvent,
+		clearPreviewState,
+		createPreviewState,
+		runDashboardJob
+	} from '$lib/dashboard-jobs.svelte';
 	import { dashboardFetch, dashboardLogsUrl } from '$lib/dashboard-api';
 	import type { OverviewData } from '$lib/types/overview';
-	import type { ManagePreviewView, PreviewSubmitPayload, RosterPreviewView } from '$lib/types/preview';
 	import type LogPanelComponent from '$lib/components/LogPanel.svelte';
 	import type DecisionHistoryComponent from '$lib/components/DecisionHistory.svelte';
 	import type { SseEvent } from '$lib/types/sse';
 
-	const AUTO_MANAGE_WINDOW_MS = 60 * 60 * 1000;
-
 	let { data } = $props();
+
+	const autoManageWindowMs = $derived(data.autoManageWindowMs);
 
 	let connectionStatus = $state('Verbinden met log stream...');
 	let authBusy = $state(false);
@@ -28,12 +33,7 @@
 	let jobBusy = $state(false);
 	let jobBusyLabel = $state('');
 	let includeTransfer = $state(true);
-	let previewSummary = $state('');
-	let previewReasoning = $state('');
-	let previewSubmitted = $state(false);
-	let managePreview = $state<ManagePreviewView | null>(null);
-	let rosterPreview = $state<RosterPreviewView | null>(null);
-	let submitPayload = $state<PreviewSubmitPayload | null>(null);
+	let preview = $state(createPreviewState());
 	let submitBusy = $state(false);
 	let logPanel: LogPanelComponent | undefined = $state();
 	let decisionHistory: DecisionHistoryComponent | undefined = $state();
@@ -42,16 +42,16 @@
 	const dashboardKey = $derived(data.dashboardKey);
 	const logsUrl = $derived(dashboardLogsUrl(dashboardKey));
 	const showPreview = $derived(
-		Boolean(previewSummary || previewReasoning || managePreview || rosterPreview)
+		Boolean(
+			preview.previewSummary ||
+				preview.previewReasoning ||
+				preview.managePreview ||
+				preview.rosterPreview
+		)
 	);
 
 	function clearPreview() {
-		previewSummary = '';
-		previewReasoning = '';
-		previewSubmitted = false;
-		managePreview = null;
-		rosterPreview = null;
-		submitPayload = null;
+		clearPreviewState(preview);
 		includeTransfer = true;
 	}
 
@@ -76,24 +76,17 @@
 		decisionHistory?.refresh();
 	}
 
-	const canSubmitPreview = $derived(Boolean(!previewSubmitted && submitPayload));
+	const canSubmitPreview = $derived(Boolean(!preview.previewSubmitted && preview.submitPayload));
 	const hasPendingTransfer = $derived(
-		Boolean(managePreview?.transfer && !managePreview.transfer.executed)
+		Boolean(preview.managePreview?.transfer && !preview.managePreview.transfer.executed)
 	);
 
 	function applyManage(data: Extract<SseEvent, { type: 'manage' }>) {
 		jobBusy = false;
 		jobBusyLabel = '';
 		submitBusy = false;
-		previewSummary = data.summary;
-		previewReasoning = data.reasoning || '';
-		previewSubmitted = data.submitted;
-		managePreview = data.preview ?? null;
-		rosterPreview = null;
-		submitPayload = data.submitted ? null : (data.submit ?? null);
-		includeTransfer = Boolean(
-			managePreview?.transfer && !managePreview.transfer.executed
-		);
+		applyPreviewEvent(preview, 'manage', data);
+		includeTransfer = preview.includeTransfer;
 	}
 
 	function handleManageFailed(data: Extract<SseEvent, { type: 'manage-failed' }>) {
@@ -106,12 +99,7 @@
 		jobBusy = false;
 		jobBusyLabel = '';
 		submitBusy = false;
-		previewSummary = data.summary;
-		previewReasoning = data.reasoning || '';
-		previewSubmitted = data.submitted;
-		rosterPreview = data.preview ?? null;
-		managePreview = null;
-		submitPayload = data.submitted ? null : (data.submit ?? null);
+		applyPreviewEvent(preview, 'roster', data);
 	}
 
 	function handleRosterFailed(data: Extract<SseEvent, { type: 'roster-failed' }>) {
@@ -121,7 +109,9 @@
 	}
 
 	async function submitPreview() {
-		if (!submitPayload) return;
+		if (!preview.submitPayload) return;
+
+		const submitPayload = preview.submitPayload;
 
 		const title =
 			submitPayload.kind === 'roster'
@@ -154,8 +144,8 @@
 			const payload = await res.json();
 			if (!res.ok) throw new Error(payload.error || 'Indienen mislukt.');
 
-			previewSubmitted = true;
-			submitPayload = null;
+			preview.previewSubmitted = true;
+			preview.submitPayload = null;
 			refreshDashboard();
 			logPanel?.addLog('✅ Simulatie ingediend bij Sporza.', 30);
 		} catch (err) {
@@ -169,66 +159,64 @@
 		const matchId = overview?.upcomingMatch?.id;
 		if (!matchId) return;
 
-		if (!dryRun) {
-			const confirmed = await askConfirm(confirmDialog, {
-				title: 'Direct indienen',
-				description:
-					'AI draait opnieuw en dient meteen in bij Sporza — zonder preview, diff of transfer. Weet je het zeker?',
-				confirmLabel: 'Direct indienen'
-			});
-			if (!confirmed) return;
-		}
+		const params = new URLSearchParams({ matchId: String(matchId) });
+		if (dryRun) params.set('dryRun', '1');
 
-		jobBusy = true;
-		jobBusyLabel = dryRun ? 'AI-voorstel maken…' : 'Direct indienen bij Sporza…';
-		clearPreview();
-
-		try {
-			const params = new URLSearchParams({ matchId: String(matchId) });
-			if (dryRun) params.set('dryRun', '1');
-			const res = await dashboardFetch(dashboardKey, `/api/run/manage?${params}`, { method: 'POST' });
-			if (res.status === 202) return;
-			if (!res.ok) {
-				const text = await res.text();
-				throw new Error(text || 'Actie mislukt.');
+		await runDashboardJob({
+			dashboardKey,
+			endpoint: `/api/run/manage?${params}`,
+			dryRun,
+			confirmDialog,
+			confirm: dryRun
+				? undefined
+				: {
+						title: 'Direct indienen',
+						description:
+							'AI draait opnieuw en dient meteen in bij Sporza — zonder preview, diff of transfer. Weet je het zeker?',
+						confirmLabel: 'Direct indienen'
+					},
+			onStart: () => {
+				jobBusy = true;
+				jobBusyLabel = dryRun ? 'AI-voorstel maken…' : 'Direct indienen bij Sporza…';
+				clearPreview();
+			},
+			onError: (message) => {
+				jobBusy = false;
+				jobBusyLabel = '';
+				logPanel?.addLog(`❌ ${message}`, 30);
 			}
-		} catch (err) {
-			jobBusy = false;
-			jobBusyLabel = '';
-			logPanel?.addLog(`❌ ${err instanceof Error ? err.message : 'Onbekende fout'}`, 30);
-		}
+		});
 	}
 
 	async function runRoster(dryRun: boolean) {
-		if (!dryRun) {
-			const confirmed = await askConfirm(confirmDialog, {
-				title: 'Direct indienen',
-				description:
-					'AI stelt een nieuwe ploeg samen en dient meteen in bij Sporza — zonder preview. Weet je het zeker?',
-				confirmLabel: 'Direct indienen'
-			});
-			if (!confirmed) return;
-		}
+		const params = new URLSearchParams();
+		if (dryRun) params.set('dryRun', '1');
+		const query = params.toString() ? `?${params}` : '';
 
-		jobBusy = true;
-		jobBusyLabel = dryRun ? 'AI-voorstel maken…' : 'Direct indienen bij Sporza…';
-		clearPreview();
-
-		try {
-			const params = new URLSearchParams();
-			if (dryRun) params.set('dryRun', '1');
-			const query = params.toString() ? `?${params}` : '';
-			const res = await dashboardFetch(dashboardKey, `/api/run/roster${query}`, { method: 'POST' });
-			if (res.status === 202) return;
-			if (!res.ok) {
-				const payload = await res.json();
-				throw new Error(payload.error || 'Ploeg samenstellen mislukt.');
+		await runDashboardJob({
+			dashboardKey,
+			endpoint: `/api/run/roster${query}`,
+			dryRun,
+			confirmDialog,
+			confirm: dryRun
+				? undefined
+				: {
+						title: 'Direct indienen',
+						description:
+							'AI stelt een nieuwe ploeg samen en dient meteen in bij Sporza — zonder preview. Weet je het zeker?',
+						confirmLabel: 'Direct indienen'
+					},
+			onStart: () => {
+				jobBusy = true;
+				jobBusyLabel = dryRun ? 'AI-voorstel maken…' : 'Direct indienen bij Sporza…';
+				clearPreview();
+			},
+			onError: (message) => {
+				jobBusy = false;
+				jobBusyLabel = '';
+				logPanel?.addLog(`❌ ${message}`, 30);
 			}
-		} catch (err) {
-			jobBusy = false;
-			jobBusyLabel = '';
-			logPanel?.addLog(`❌ ${err instanceof Error ? err.message : 'Onbekende fout'}`, 30);
-		}
+		});
 	}
 
 	function handlePrimary() {
@@ -267,7 +255,7 @@
 	<div>
 		<h1 class="text-2xl font-bold tracking-tight text-white">🚴 Sporza Wielermanager</h1>
 		<p class="mt-1 text-sm text-slate-400">
-			Auto-manage {Math.round(AUTO_MANAGE_WINDOW_MS / 60_000)} min voor elke deadline
+			Auto-manage {Math.round(autoManageWindowMs / 60_000)} min voor elke deadline
 		</p>
 	</div>
 	<div class="flex items-center gap-3">
@@ -309,13 +297,13 @@
 
 		{#if showPreview}
 			<SimulatePreview
-				summary={previewSummary}
-				reasoning={previewReasoning}
-				submitted={previewSubmitted}
-				{managePreview}
-				{rosterPreview}
+				summary={preview.previewSummary}
+				reasoning={preview.previewReasoning}
+				submitted={preview.previewSubmitted}
+				managePreview={preview.managePreview}
+				rosterPreview={preview.rosterPreview}
 				canSubmit={canSubmitPreview}
-				submitBusy={submitBusy}
+				{submitBusy}
 				{hasPendingTransfer}
 				bind:includeTransfer
 				transferState={overview?.transferState ?? null}

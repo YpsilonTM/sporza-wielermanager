@@ -1,5 +1,6 @@
 <script lang="ts">
 	import RiderAvatar from '$lib/components/RiderAvatar.svelte';
+	import { formatRoleLabel } from '$lib/format';
 	import type { TransferStateView } from '$lib/types/overview';
 	import type { ManagePreviewView, RosterPreviewView } from '$lib/types/preview';
 
@@ -64,13 +65,6 @@
 	</summary>
 
 	<div class="mt-3 space-y-4 border-t border-slate-700/80 pt-3">
-		{#if summary}
-			<p class="text-sm text-slate-400">
-				<span class="font-semibold text-slate-300">Samenvatting:</span>
-				{summary}
-			</p>
-		{/if}
-
 		{#if managePreview?.transfer}
 			<div class="rounded-lg border border-amber-800/50 bg-amber-950/20 p-3">
 				<p class="text-xs font-semibold uppercase tracking-wider text-amber-300">Transfer</p>
@@ -134,10 +128,10 @@
 					{#if managePreview.currentLineup}
 						<ul class="space-y-1 text-xs text-slate-400">
 							{#each managePreview.currentLineup.starters as rider (rider.id)}
-								<li>{rider.name} · {rider.role === 'CAPTAIN' ? 'Kapitein' : 'Starter'}</li>
+								<li>{rider.name} · {formatRoleLabel(rider.role)}</li>
 							{/each}
 							{#each managePreview.currentLineup.bench as rider (rider.id)}
-								<li class="text-slate-500">{rider.name} · Bank</li>
+								<li class="text-slate-500">{rider.name} · {formatRoleLabel(rider.role)}</li>
 							{/each}
 						</ul>
 					{:else}
@@ -148,10 +142,10 @@
 					<p class="mb-2 text-xs font-semibold uppercase tracking-wider text-emerald-500">Voorstel</p>
 					<ul class="space-y-1 text-xs text-slate-300">
 						{#each managePreview.proposedLineup.starters as rider (rider.id)}
-							<li>{rider.name} · {rider.role === 'CAPTAIN' ? 'Kapitein' : 'Starter'}</li>
+							<li>{rider.name} · {formatRoleLabel(rider.role)}</li>
 						{/each}
 						{#each managePreview.proposedLineup.bench as rider (rider.id)}
-							<li class="text-slate-400">{rider.name} · Bank</li>
+							<li class="text-slate-400">{rider.name} · {formatRoleLabel(rider.role)}</li>
 						{/each}
 					</ul>
 				</div>

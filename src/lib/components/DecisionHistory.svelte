@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { dashboardDecisionsUrl, dashboardFetch } from '$lib/dashboard-api';
+	import { confidenceDisplayLabel } from '$lib/confidence';
 	import type { ManagerDecisionView } from '$lib/types/decisions';
 
 	let { dashboardKey = null }: { dashboardKey?: string | null } = $props();
@@ -13,13 +14,6 @@
 		if (type === 'lineup') return 'Lineup';
 		if (type === 'roster') return 'Ploeg';
 		return type;
-	}
-
-	function confidenceLabel(value: number | null): string {
-		if (value == null) return '—';
-		if (value >= 0.85) return 'Hoog';
-		if (value >= 0.55) return 'Medium';
-		return 'Laag';
 	}
 
 	function formatWhen(iso: string): string {
@@ -89,7 +83,7 @@
 								<span class="badge-warn">simulatie</span>
 							{/if}
 							<span class="chip bg-slate-800 text-slate-300 ring-slate-700">
-								{confidenceLabel(decision.confidence)}
+								{confidenceDisplayLabel(decision.confidence)}
 							</span>
 						</div>
 					</div>

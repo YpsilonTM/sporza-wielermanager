@@ -1,19 +1,15 @@
-// @ts-nocheck — thin orchestration layer over legacy JS server modules
+// @ts-nocheck — orchestration over legacy JS manager/predictor modules
 import { getSettings } from './config.js';
-import { createAuthenticatedApi, runAuthRefresh } from './auth.js';
+import { runAuthRefresh } from './auth.js';
 import { formatAuthLoginError } from './auth-errors.js';
-import { WielermanagerApiClient } from './wielermanager-api.js';
-import { decodeTurboStream, extractEditionRouteLoader } from './turbo-stream.js';
-import { runManager, runRosterBuilder, buildManagerContext } from './manager.js';
-import { describeLineup } from './lineup.js';
-import { getFreeTransfers, validateLineup, lineupToApiPayload, validateRosterIds, getFreeTransfersRemaining } from './rules.js';
-import { areTransfersOpen, validateTransfer } from './transfers.js';
-import { pinoLogger, broadcastSse } from './logger';
+import { runManager, runRosterBuilder } from './manager.js';
+import { submitLineupWithOptionalTransfer, submitRosterFromPreview } from './manager.js';
+import { buildManagePreview, buildRosterPreview, buildLineupSubmitPayload, buildRosterSubmitPayload } from './preview';
+import { pinoLogger } from './logger';
+import { broadcastSse } from './logger';
 import {
 	getManageRunning,
 	setManageRunning,
-	getOverviewCache,
-	setOverviewCache,
 	invalidateOverviewCache,
 	markManageInFlight,
 	clearManageInFlight,
@@ -22,152 +18,15 @@ import {
 	setRosterRunning
 } from './app-state';
 import { wasMatchLineupSubmitted } from './decisions';
-import { canAutoRefreshAuth } from './auth.js';
-import { buildManagePreview, buildRosterPreview, buildLineupSubmitPayload, buildRosterSubmitPayload } from './preview';
 import { notifyWebhook } from './webhook';
-import type { PreviewSubmitPayload } from '$lib/types/preview';
+import { createManagerApiContext, getUpcomingMatch } from './format';
+import { fetchOverviewRaw } from './overview-service';
+import { emitJobResult, formatDecisionReasoning } from './job-side-effects';
 import { enrichStageForUi } from './overview-enrichment';
-import { buildOverviewUi, mapLineupView, mapRosterView } from './overview-ui';
-import { AUTO_MANAGE_WINDOW_MS } from './config.js';
-import type { OverviewData } from '$lib/types/overview';
-import { prisma } from './db';
-import { normalizeConfidence } from './confidence';
+import type { PreviewSubmitPayload } from '$lib/types/preview';
 
-const OVERVIEW_CACHE_TTL_MS = 5 * 60 * 1000;
-
-function formatDecisionReasoning(decision: {
-	lineup?: Array<{ reasoning?: string }>;
-	picks?: Array<{ reasoning?: string }>;
-} | null | undefined): string {
-	if (!decision) return '';
-	const fromLineup = (decision.lineup || []).map((entry) => entry.reasoning).filter(Boolean);
-	const fromPicks = (Array.isArray(decision.picks) ? decision.picks : [])
-		.map((entry) => entry.reasoning)
-		.filter(Boolean);
-	return [...fromLineup, ...fromPicks].join(' ');
-}
-
-async function fetchOverviewRaw(settings: ReturnType<typeof getSettings>, api: WielermanagerApiClient, cookies: unknown[]) {
-	const cache = getOverviewCache();
-	if (cache.data && Date.now() - cache.time < OVERVIEW_CACHE_TTL_MS) {
-		return cache.data as Awaited<ReturnType<WielermanagerApiClient['fetchEditionOverview']>>;
-	}
-
-	const overview = await api.fetchEditionOverview(
-		cookies,
-		decodeTurboStream,
-		extractEditionRouteLoader
-	);
-	setOverviewCache(overview);
-	return overview;
-}
-
-function createOnLog() {
-	return (msg: string, level: 'info' | 'warn' | 'debug' = 'info') => {
-		if (level === 'debug') {
-			pinoLogger.debug(msg);
-		} else if (level === 'warn') {
-			pinoLogger.warn(msg);
-		} else {
-			pinoLogger.info(msg);
-		}
-	};
-}
-
-export async function fetchOverviewData(): Promise<OverviewData> {
-	const settings = getSettings();
-	const { api, getCookies } = await createAuthenticatedApi(settings, {
-		onAuthRefresh: (message) => pinoLogger.info(message)
-	});
-	const overview = await fetchOverviewRaw(settings, api, getCookies());
-	const match = overview.edition?.upcomingCyclingMatch;
-	const roster = overview.gameStatus?.roster ?? [];
-
-	const enriched = enrichStageForUi(match, roster.length);
-
-	let upcomingLineup = null;
-	let transferState = null;
-
-	try {
-		upcomingLineup = match?.id
-			? await api.fetchMatchLineup(getCookies(), match.id)
-			: await api.fetchUpcomingLineup(getCookies());
-	} catch {
-		upcomingLineup = null;
-	}
-
-	try {
-		const rawTransferState = await api.fetchTransferState(getCookies());
-		const freeTransfers = getFreeTransfers(overview.gameRules ?? {}, rawTransferState);
-		const freeTransfersRemaining = getFreeTransfersRemaining(rawTransferState, overview.gameRules ?? {});
-		transferState = {
-			usedTransfers: rawTransferState.usedTransfers,
-			freeTransfers,
-			freeTransfersRemaining,
-			remainingBudget: rawTransferState.remainingBudget,
-			transfersOpen: areTransfersOpen(overview.gameStatus, overview.edition)
-		};
-	} catch {
-		transferState = null;
-	}
-
-	const lineupView = upcomingLineup?.riders?.length ? describeLineup(upcomingLineup) : null;
-	const mappedLineup = lineupView ? mapLineupView(lineupView) : null;
-
-	const rawRanking = overview.gameStatus?.ranking ?? overview.personalRanking ?? null;
-	const lastMatch = overview.gameStatus?.lastMatch ?? null;
-	const ranking = rawRanking
-		? {
-				rank: rawRanking.rank ?? null,
-				amountOfPlayers: rawRanking.amountOfPlayers ?? null,
-				overallScore: rawRanking.overallScore ?? null,
-				lastMatchScore: lastMatch?.matchScore ?? null,
-				lastMatchName: lastMatch?.match?.name ?? null
-			}
-		: null;
-
-	const base: Omit<OverviewData, 'ui' | 'auth'> = {
-		edition: overview.edition,
-		gameStatus: overview.gameStatus,
-		gameRules: overview.gameRules,
-		upcomingMatch: enriched,
-		upcomingLineup: mappedLineup,
-		rosterPreview: mapRosterView(roster),
-		transferState,
-		ranking
-	};
-
-	return {
-		...base,
-		auth: {
-			valid: Boolean(overview.gameStatus?.user),
-			canRefresh: canAutoRefreshAuth(settings)
-		},
-		ui: buildOverviewUi(base)
-	};
-}
-
-export async function persistDecision(entry: {
-	matchId?: number;
-	matchName?: string;
-	decisionType: string;
-	summary: string;
-	confidence?: number | string;
-	reasoning?: string;
-	submitted: boolean;
-}): Promise<void> {
-	await prisma.managerDecision.create({
-		data: {
-			matchId: entry.matchId ?? null,
-			matchName: entry.matchName ?? null,
-			decisionType: entry.decisionType,
-			summary: entry.summary,
-			confidence: normalizeConfidence(entry.confidence),
-			reasoning: entry.reasoning || '',
-			submitted: entry.submitted
-		}
-	});
-}
+export { fetchOverviewData } from './overview-service';
+export { persistDecision } from './job-side-effects';
 
 export async function runAutoManage(): Promise<void> {
 	if (getManageRunning()) {
@@ -177,14 +36,11 @@ export async function runAutoManage(): Promise<void> {
 
 	setManageRunning(true);
 	const settings = getSettings();
-	const onLog = createOnLog();
 
 	try {
-		const { api, getCookies } = await createAuthenticatedApi(settings, {
-			onAuthRefresh: (message) => pinoLogger.info(message)
-		});
-		let overview = await fetchOverviewRaw(settings, api, getCookies());
-		const match = overview.edition?.upcomingCyclingMatch;
+		const ctx = await createManagerApiContext(settings);
+		let overview = await fetchOverviewRaw(settings, ctx.api, ctx.getCookies());
+		const match = getUpcomingMatch(overview);
 
 		if (!match) {
 			pinoLogger.debug('No upcoming match — skipping auto-manage.');
@@ -195,17 +51,17 @@ export async function runAutoManage(): Promise<void> {
 			pinoLogger.info('Geen ploeg gevonden — AI bouwt initiële roster...');
 			await runRosterBuilder({
 				settings,
-				api,
-				getCookies,
-				decodeTurboStream,
-				extractEditionRouteLoader,
+				api: ctx.api,
+				getCookies: ctx.getCookies,
+				decodeTurboStream: ctx.decodeTurboStream,
+				extractEditionRouteLoader: ctx.extractEditionRouteLoader,
 				options: {
 					submit: true,
-					onLog
+					onLog: ctx.onLog
 				}
 			});
 			invalidateOverviewCache();
-			overview = await fetchOverviewRaw(settings, api, getCookies());
+			overview = await fetchOverviewRaw(settings, ctx.api, ctx.getCookies());
 		}
 
 		if (!overview.gameStatus?.roster?.length) {
@@ -227,54 +83,55 @@ export async function runAutoManage(): Promise<void> {
 		pinoLogger.info(`🤖 Auto-manage voor ${match.name}...`);
 		const result = await runManager({
 			settings,
-			api,
-			getCookies,
-			decodeTurboStream,
-			extractEditionRouteLoader,
+			api: ctx.api,
+			getCookies: ctx.getCookies,
+			decodeTurboStream: ctx.decodeTurboStream,
+			extractEditionRouteLoader: ctx.extractEditionRouteLoader,
 			options: {
 				submit: true,
 				allowTransfers: process.env.ALLOW_AUTO_TRANSFERS === 'true',
-				onLog
+				onLog: ctx.onLog
 			}
 		});
 
-		await persistDecision({
-			matchId: match.id,
-			matchName: match.name,
-			decisionType: 'lineup',
-			summary: result.decision.summary,
-			confidence: result.decision.confidence,
-			reasoning: formatDecisionReasoning(result.decision),
-			submitted: result.submitted
-		});
+		const reasoning = formatDecisionReasoning(result.decision);
 
-		broadcastSse({
-			type: 'manage',
-			matchId: match.id,
-			matchName: match.name,
-			summary: result.decision.summary,
-			confidence: result.decision.confidence,
-			reasoning: formatDecisionReasoning(result.decision),
-			submitted: true,
-			autoManaged: true,
-			preview: buildManagePreview({
-				...result,
-				allowTransfers: process.env.ALLOW_AUTO_TRANSFERS === 'true',
+		await emitJobResult({
+			persist: {
+				matchId: match.id,
+				matchName: match.name,
+				decisionType: 'lineup',
+				summary: result.decision.summary,
+				confidence: result.decision.confidence,
+				reasoning,
 				submitted: true
-			})
+			},
+			sse: {
+				type: 'manage',
+				matchId: match.id,
+				matchName: match.name,
+				summary: result.decision.summary,
+				confidence: result.decision.confidence,
+				reasoning,
+				submitted: true,
+				autoManaged: true,
+				preview: buildManagePreview({
+					...result,
+					allowTransfers: process.env.ALLOW_AUTO_TRANSFERS === 'true',
+					submitted: true
+				})
+			},
+			webhook: {
+				event: 'auto-manage-success',
+				title: `Auto-manage voltooid: ${match.name}`,
+				message: result.decision.summary,
+				submitted: true,
+				matchId: match.id,
+				matchName: match.name,
+				autoManaged: true
+			}
 		});
 
-		await notifyWebhook({
-			event: 'auto-manage-success',
-			title: `Auto-manage voltooid: ${match.name}`,
-			message: result.decision.summary,
-			submitted: true,
-			matchId: match.id,
-			matchName: match.name,
-			autoManaged: true
-		});
-
-		invalidateOverviewCache();
 		pinoLogger.info(`✅ Auto-manage voltooid voor ${match.name}.`);
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
@@ -309,24 +166,21 @@ export async function runManageJob(options: {
 
 	const dryRun = Boolean(options.dryRun);
 	const submit = options.submit !== false && !dryRun;
-	const onLog = createOnLog();
 
 	try {
-		const { api, getCookies } = await createAuthenticatedApi(settings, {
-			onAuthRefresh: (message) => pinoLogger.info(message)
-		});
+		const ctx = await createManagerApiContext(settings);
 
 		const result = await runManager({
 			settings,
-			api,
-			getCookies,
-			decodeTurboStream,
-			extractEditionRouteLoader,
+			api: ctx.api,
+			getCookies: ctx.getCookies,
+			decodeTurboStream: ctx.decodeTurboStream,
+			extractEditionRouteLoader: ctx.extractEditionRouteLoader,
 			options: {
 				dryRun,
 				submit,
 				allowTransfers: Boolean(options.allowTransfers),
-				onLog
+				onLog: ctx.onLog
 			}
 		});
 
@@ -336,40 +190,40 @@ export async function runManageJob(options: {
 			allowTransfers: Boolean(options.allowTransfers),
 			submitted: result.submitted
 		});
+		const reasoning = formatDecisionReasoning(result.decision);
 
-		await persistDecision({
-			matchId: match.id,
-			matchName: match.name,
-			decisionType: 'lineup',
-			summary: result.decision.summary,
-			confidence: result.decision.confidence,
-			reasoning: formatDecisionReasoning(result.decision),
-			submitted: result.submitted
+		await emitJobResult({
+			persist: {
+				matchId: match.id,
+				matchName: match.name,
+				decisionType: 'lineup',
+				summary: result.decision.summary,
+				confidence: result.decision.confidence,
+				reasoning,
+				submitted: result.submitted
+			},
+			sse: {
+				type: 'manage',
+				matchId: match.id,
+				matchName: match.name,
+				summary: result.decision.summary,
+				confidence: result.decision.confidence,
+				reasoning,
+				submitted: result.submitted,
+				autoManaged: false,
+				preview,
+				submit: result.submitted ? undefined : buildLineupSubmitPayload(result)
+			},
+			webhook: {
+				event: result.submitted ? 'manage-success' : 'manage-simulated',
+				title: result.submitted ? `Lineup ingediend: ${match.name}` : `Lineup simulatie: ${match.name}`,
+				message: result.decision.summary,
+				submitted: result.submitted,
+				matchId: match.id,
+				matchName: match.name
+			}
 		});
 
-		broadcastSse({
-			type: 'manage',
-			matchId: match.id,
-			matchName: match.name,
-			summary: result.decision.summary,
-			confidence: result.decision.confidence,
-			reasoning: formatDecisionReasoning(result.decision),
-			submitted: result.submitted,
-			autoManaged: false,
-			preview,
-			submit: result.submitted ? undefined : buildLineupSubmitPayload(result)
-		});
-
-		await notifyWebhook({
-			event: result.submitted ? 'manage-success' : 'manage-simulated',
-			title: result.submitted ? `Lineup ingediend: ${match.name}` : `Lineup simulatie: ${match.name}`,
-			message: result.decision.summary,
-			submitted: result.submitted,
-			matchId: match.id,
-			matchName: match.name
-		});
-
-		invalidateOverviewCache();
 		return { accepted: true, matchId: match.id };
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
@@ -407,53 +261,49 @@ export async function runRosterJob(options: {
 	const settings = getSettings();
 	const dryRun = Boolean(options.dryRun);
 	const submit = options.submit !== false && !dryRun;
-	const onLog = createOnLog();
 
 	try {
-		const { api, getCookies } = await createAuthenticatedApi(settings, {
-			onAuthRefresh: (message) => pinoLogger.info(message)
-		});
+		const ctx = await createManagerApiContext(settings);
 
 		const result = await runRosterBuilder({
 			settings,
-			api,
-			getCookies,
-			decodeTurboStream,
-			extractEditionRouteLoader,
+			api: ctx.api,
+			getCookies: ctx.getCookies,
+			decodeTurboStream: ctx.decodeTurboStream,
+			extractEditionRouteLoader: ctx.extractEditionRouteLoader,
 			options: {
 				dryRun,
 				submit,
 				force: Boolean(options.force),
-				onLog
+				onLog: ctx.onLog
 			}
 		});
 
 		const preview = buildRosterPreview(result);
+		const reasoning = formatDecisionReasoning(result.decision);
 
-		await persistDecision({
-			decisionType: 'roster',
-			summary: result.decision?.summary ?? 'Roster bijgewerkt',
-			reasoning: formatDecisionReasoning(result.decision),
-			submitted: result.submitted
+		await emitJobResult({
+			persist: {
+				decisionType: 'roster',
+				summary: result.decision?.summary ?? 'Roster bijgewerkt',
+				reasoning,
+				submitted: result.submitted
+			},
+			sse: {
+				type: 'roster',
+				summary: result.decision?.summary ?? 'Roster bijgewerkt',
+				reasoning,
+				submitted: result.submitted,
+				preview,
+				submit: result.submitted ? undefined : buildRosterSubmitPayload(result)
+			},
+			webhook: {
+				event: result.submitted ? 'roster-success' : 'roster-simulated',
+				title: result.submitted ? 'Ploeg ingediend' : 'Ploeg simulatie',
+				message: result.decision?.summary ?? 'Roster bijgewerkt',
+				submitted: result.submitted
+			}
 		});
-
-		broadcastSse({
-			type: 'roster',
-			summary: result.decision?.summary ?? 'Roster bijgewerkt',
-			reasoning: formatDecisionReasoning(result.decision),
-			submitted: result.submitted,
-			preview,
-			submit: result.submitted ? undefined : buildRosterSubmitPayload(result)
-		});
-
-		await notifyWebhook({
-			event: result.submitted ? 'roster-success' : 'roster-simulated',
-			title: result.submitted ? 'Ploeg ingediend' : 'Ploeg simulatie',
-			message: result.decision?.summary ?? 'Roster bijgewerkt',
-			submitted: result.submitted
-		});
-
-		invalidateOverviewCache();
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
 		broadcastSse({
@@ -476,52 +326,41 @@ export async function submitPreviewJob(
 	options: { allowTransfers?: boolean } = {}
 ): Promise<void> {
 	const settings = getSettings();
-	const onLog = createOnLog();
-
-	const { api, getCookies } = await createAuthenticatedApi(settings, {
-		onAuthRefresh: (message) => pinoLogger.info(message)
-	});
+	const ctx = await createManagerApiContext(settings);
 
 	if (payload.kind === 'roster') {
 		if (!payload.cyclistIds?.length) {
 			throw new Error('Geen ploeg om in te dienen.');
 		}
 
-		const context = await buildManagerContext(
-			api,
-			getCookies(),
-			decodeTurboStream,
-			extractEditionRouteLoader
-		);
-		const validation = validateRosterIds(payload.cyclistIds, context.allCyclists, context.gameRules);
-		if (!validation.valid) {
-			throw new Error(`Ongeldige ploeg: ${validation.errors.join('; ')}`);
-		}
-
-		onLog('Simulatie indienen — ploeg opslaan bij Sporza...');
-		await api.saveRoster(getCookies(), payload.cyclistIds);
-
-		await persistDecision({
-			decisionType: 'roster',
-			summary: payload.summary ?? 'Roster ingediend vanuit simulatie',
-			confidence: payload.confidence,
-			submitted: true
+		await submitRosterFromPreview({
+			api: ctx.api,
+			getCookies: ctx.getCookies,
+			decodeTurboStream: ctx.decodeTurboStream,
+			extractEditionRouteLoader: ctx.extractEditionRouteLoader,
+			cyclistIds: payload.cyclistIds,
+			onLog: ctx.onLog
 		});
 
-		broadcastSse({
-			type: 'roster',
-			summary: payload.summary ?? 'Roster ingediend vanuit simulatie',
-			submitted: true
+		await emitJobResult({
+			persist: {
+				decisionType: 'roster',
+				summary: payload.summary ?? 'Roster ingediend vanuit simulatie',
+				confidence: payload.confidence,
+				submitted: true
+			},
+			sse: {
+				type: 'roster',
+				summary: payload.summary ?? 'Roster ingediend vanuit simulatie',
+				submitted: true
+			},
+			webhook: {
+				event: 'roster-success',
+				title: 'Ploeg ingediend (simulatie)',
+				message: payload.summary ?? 'Roster ingediend vanuit simulatie',
+				submitted: true
+			}
 		});
-
-		await notifyWebhook({
-			event: 'roster-success',
-			title: 'Ploeg ingediend (simulatie)',
-			message: payload.summary ?? 'Roster ingediend vanuit simulatie',
-			submitted: true
-		});
-
-		invalidateOverviewCache();
 		return;
 	}
 
@@ -529,74 +368,42 @@ export async function submitPreviewJob(
 		throw new Error('Geen lineup om in te dienen.');
 	}
 
-	const context = await buildManagerContext(
-		api,
-		getCookies(),
-		decodeTurboStream,
-		extractEditionRouteLoader
-	);
+	await submitLineupWithOptionalTransfer({
+		api: ctx.api,
+		getCookies: ctx.getCookies,
+		decodeTurboStream: ctx.decodeTurboStream,
+		extractEditionRouteLoader: ctx.extractEditionRouteLoader,
+		payload,
+		allowTransfers: Boolean(options.allowTransfers),
+		onLog: ctx.onLog
+	});
 
-	let roster = context.roster ?? [];
-	const transferState = await api.fetchTransferState(getCookies());
-	const transfersOpen = areTransfersOpen(context.gameStatus, context.overview?.edition);
-
-	if (payload.transfer && transfersOpen) {
-		if (!options.allowTransfers) {
-			onLog('Transfer uit simulatie overgeslagen — niet ingeschakeld.', 'warn');
-		} else {
-			const transferResult = validateTransfer(
-				payload.transfer,
-				roster,
-				context.allCyclists,
-				context.gameRules,
-				transferState.usedTransfers
-			);
-			if (!transferResult.valid) {
-				throw new Error(`Transfer ongeldig: ${transferResult.errors.join('; ')}`);
-			}
-			onLog('Transfer uit simulatie indienen...');
-			await api.createTransfer(getCookies(), payload.transfer.ridersIn, payload.transfer.ridersOut);
-			roster = transferResult.nextRoster;
-			onLog('Transfer uitgevoerd.');
+	await emitJobResult({
+		persist: {
+			matchId: payload.matchId,
+			matchName: payload.matchName ?? null,
+			decisionType: 'lineup',
+			summary: payload.summary ?? 'Lineup ingediend vanuit simulatie',
+			confidence: payload.confidence,
+			submitted: true
+		},
+		sse: {
+			type: 'manage',
+			matchId: payload.matchId,
+			matchName: payload.matchName ?? `Rit ${payload.matchId}`,
+			summary: payload.summary ?? 'Lineup ingediend vanuit simulatie',
+			confidence: payload.confidence,
+			submitted: true
+		},
+		webhook: {
+			event: 'manage-success',
+			title: `Lineup ingediend (simulatie): ${payload.matchName ?? payload.matchId}`,
+			message: payload.summary ?? 'Lineup ingediend vanuit simulatie',
+			submitted: true,
+			matchId: payload.matchId,
+			matchName: payload.matchName
 		}
-	}
-
-	const lineupValidation = validateLineup(payload.lineup, roster, context.gameRules);
-	if (!lineupValidation.valid) {
-		throw new Error(`Ongeldige lineup: ${lineupValidation.errors.join('; ')}`);
-	}
-
-	onLog(`Simulatie indienen — lineup opslaan voor ${payload.matchName ?? payload.matchId}...`);
-	await api.saveLineup(getCookies(), payload.matchId, lineupToApiPayload(payload.lineup));
-
-	await persistDecision({
-		matchId: payload.matchId,
-		matchName: payload.matchName ?? null,
-		decisionType: 'lineup',
-		summary: payload.summary ?? 'Lineup ingediend vanuit simulatie',
-		confidence: payload.confidence,
-		submitted: true
 	});
-
-	broadcastSse({
-		type: 'manage',
-		matchId: payload.matchId,
-		matchName: payload.matchName ?? `Rit ${payload.matchId}`,
-		summary: payload.summary ?? 'Lineup ingediend vanuit simulatie',
-		confidence: payload.confidence,
-		submitted: true
-	});
-
-	await notifyWebhook({
-		event: 'manage-success',
-		title: `Lineup ingediend (simulatie): ${payload.matchName ?? payload.matchId}`,
-		message: payload.summary ?? 'Lineup ingediend vanuit simulatie',
-		submitted: true,
-		matchId: payload.matchId,
-		matchName: payload.matchName
-	});
-
-	invalidateOverviewCache();
 }
 
 export async function runAuthRefreshJob(): Promise<void> {
@@ -609,5 +416,3 @@ export async function runAuthRefreshJob(): Promise<void> {
 		pinoLogger.error(formatAuthLoginError(err));
 	}
 }
-
-export { AUTO_MANAGE_WINDOW_MS };

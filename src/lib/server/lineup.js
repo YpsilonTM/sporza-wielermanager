@@ -4,6 +4,7 @@ import {
   getSubstituteSlots,
   validateLineup
 } from "./rules.js";
+import { formatRiderName, formatRoleLabel } from "$lib/format.js";
 
 function entryId(entry) {
   return entry.cyclistId ?? entry.id;
@@ -130,17 +131,11 @@ export function splitLineupByRole(lineup) {
 }
 
 export function formatLineupRoleLabel(lineupType) {
-  if (lineupType === "CAPTAIN") {
-    return "CAPTAIN";
-  }
-  if (lineupType === "SUBSTITUTE") {
-    return "BANK";
-  }
-  return "START";
+  return formatRoleLabel(lineupType, "en");
 }
 
 export function formatCyclistShort(cyclist) {
-  return `#${cyclist.id} ${cyclist.firstName} ${cyclist.lastName}`;
+  return formatRiderName(cyclist, { includeId: true });
 }
 
 export function describeLineup(lineup) {

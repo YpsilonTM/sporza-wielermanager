@@ -1,5 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 
+import { formatRiderName } from "$lib/format.js";
+
 import {
   getLineupSize,
   getSquadSize,
@@ -88,7 +90,7 @@ function tryParseDecision(rawText) {
   }
 }
 
-async function repairRosterDecision(ai, malformedText) {
+async function repairJsonDecision(ai, malformedText, schema) {
   const repairPrompt = `
 Fix this output into valid JSON matching the required schema exactly.
 Return only JSON object text, no markdown.
@@ -104,7 +106,7 @@ ${malformedText}
       responseFormat: {
         text: {
           mimeType: "application/json",
-          schema: ROSTER_DECISION_SCHEMA
+          schema
         }
       },
       temperature: 0
@@ -114,36 +116,18 @@ ${malformedText}
   return tryParseDecision(repaired.text);
 }
 
+async function repairRosterDecision(ai, malformedText) {
+  return repairJsonDecision(ai, malformedText, ROSTER_DECISION_SCHEMA);
+}
+
 async function repairDecision(ai, malformedText) {
-  const repairPrompt = `
-Fix this output into valid JSON matching the required schema exactly.
-Return only JSON object text, no markdown.
-
-Malformed output:
-${malformedText}
-`.trim();
-
-  const repaired = await ai.models.generateContent({
-    model: REPAIR_MODEL,
-    contents: repairPrompt,
-    config: {
-      responseFormat: {
-        text: {
-          mimeType: "application/json",
-          schema: MANAGER_DECISION_SCHEMA
-        }
-      },
-      temperature: 0
-    }
-  });
-
-  return tryParseDecision(repaired.text);
+  return repairJsonDecision(ai, malformedText, MANAGER_DECISION_SCHEMA);
 }
 
 function compactCyclist(cyclist) {
   return {
     id: cyclist.id,
-    name: `${cyclist.firstName} ${cyclist.lastName}`.trim(),
+    name: formatRiderName(cyclist),
     price: cyclist.price,
     team: cyclist.team?.name ?? cyclist.teamId,
     riderTypes: cyclist.riderTypes ?? [],
@@ -320,6 +304,8 @@ Return ALLEEN JSON met: lineup (cyclistId, lineupType, reasoning), transfers (op
 `.trim();
 }
 
+const UNCERTAINTY_PATTERN = /onduidelijk|onbekend|moeilijk|twijfel|uncertain|unclear/;
+
 function needsEscalation(decision) {
   if (decision.confidence === "low") {
     return true;
@@ -328,7 +314,7 @@ function needsEscalation(decision) {
     return true;
   }
   const combined = `${decision.summary} ${decision.lineup.map((l) => l.reasoning).join(" ")}`.toLowerCase();
-  return /onduidelijk|onbekend|moeilijk|twijfel|uncertain|unclear/.test(combined);
+  return UNCERTAINTY_PATTERN.test(combined);
 }
 
 function asPickList(picks) {
@@ -352,10 +338,10 @@ function needsRosterEscalation(decision, gameRules) {
     return true;
   }
   const combined = `${decision.summary} ${asPickList(decision.picks).map((p) => p.reasoning).join(" ")}`.toLowerCase();
-  return /onduidelijk|onbekend|moeilijk|twijfel|uncertain|unclear/.test(combined);
+  return UNCERTAINTY_PATTERN.test(combined);
 }
 
-async function generateDecision(ai, model, prompt, debug) {
+async function generateStructuredDecision(ai, model, prompt, schema, debug, { temperature = 0.2, logLabel = "Gemini" } = {}) {
   const response = await ai.models.generateContent({
     model,
     contents: prompt,
@@ -364,14 +350,64 @@ async function generateDecision(ai, model, prompt, debug) {
       responseFormat: {
         text: {
           mimeType: "application/json",
-          schema: MANAGER_DECISION_SCHEMA
+          schema
         }
       },
-      temperature: 0.2
+      temperature
     }
   });
-  debug(`Gemini raw (${model}): ${String(response.text || "").slice(0, 400)}`);
+  debug(`${logLabel} raw (${model}): ${String(response.text || "").slice(0, 400)}`);
   return response.text;
+}
+
+async function generateDecision(ai, model, prompt, debug) {
+  return generateStructuredDecision(ai, model, prompt, MANAGER_DECISION_SCHEMA, debug);
+}
+
+async function generateRosterDecision(ai, model, prompt, debug) {
+  return generateStructuredDecision(ai, model, prompt, ROSTER_DECISION_SCHEMA, debug, {
+    temperature: 0.3,
+    logLabel: "Gemini roster"
+  });
+}
+
+async function predictWithEscalation({
+  ai,
+  defaultModel,
+  escalationModel,
+  prompt,
+  schema,
+  repairFn,
+  generateFn,
+  needsEscalationFn,
+  normalizeFn,
+  escalationSuffix,
+  onDebug
+}) {
+  let model = defaultModel;
+  let rawText = await generateFn(ai, model, prompt, onDebug);
+  let decision;
+  try {
+    decision = normalizeFn(tryParseDecision(rawText));
+  } catch {
+    decision = normalizeFn(await repairFn(ai, rawText));
+  }
+
+  if (needsEscalationFn(decision)) {
+    onDebug(`Escalating to ${escalationModel}`);
+    model = escalationModel;
+    const escalationPrompt = `${prompt}\n\n${escalationSuffix}`;
+    rawText = await generateFn(ai, model, escalationPrompt, onDebug);
+    try {
+      decision = normalizeFn(tryParseDecision(rawText));
+    } catch {
+      decision = normalizeFn(await repairFn(ai, rawText));
+    }
+    decision.escalated = true;
+  }
+
+  decision.model = model;
+  return normalizeFn(decision);
 }
 
 export async function predictRosterDecision(apiKey, context, options = {}) {
@@ -388,57 +424,24 @@ export async function predictRosterDecision(apiKey, context, options = {}) {
   });
 
   const prompt = buildRosterPrompt({ ...context, todayStr });
-  let model = defaultModel;
-
   try {
-    let rawText = await generateRosterDecision(ai, model, prompt, onDebug);
-    let decision;
-    try {
-      decision = normalizeRosterDecision(tryParseDecision(rawText));
-    } catch {
-      decision = normalizeRosterDecision(await repairRosterDecision(ai, rawText));
-    }
-
-    if (needsRosterEscalation(decision, context.gameRules)) {
-      onDebug(`Escalating roster to ${escalationModel}`);
-      model = escalationModel;
-      const escalationPrompt = `${prompt}
-
-Extra: vorige poging was onvolledig of onzeker. Lever exact ${getSquadSize(context.gameRules)} geldige cyclistIds die alle regels respecteren.`;
-      rawText = await generateRosterDecision(ai, model, escalationPrompt, onDebug);
-      try {
-        decision = normalizeRosterDecision(tryParseDecision(rawText));
-      } catch {
-        decision = normalizeRosterDecision(await repairRosterDecision(ai, rawText));
-      }
-      decision.escalated = true;
-    }
-
-    decision.model = model;
-    return normalizeRosterDecision(decision);
+    return await predictWithEscalation({
+      ai,
+      defaultModel,
+      escalationModel,
+      prompt,
+      schema: ROSTER_DECISION_SCHEMA,
+      repairFn: repairRosterDecision,
+      generateFn: generateRosterDecision,
+      needsEscalationFn: (decision) => needsRosterEscalation(decision, context.gameRules),
+      normalizeFn: normalizeRosterDecision,
+      escalationSuffix: `Extra: vorige poging was onvolledig of onzeker. Lever exact ${getSquadSize(context.gameRules)} geldige cyclistIds die alle regels respecteren.`,
+      onDebug
+    });
   } catch (error) {
     onDebug(`Roster prediction failed: ${error instanceof Error ? error.message : String(error)}`);
     return null;
   }
-}
-
-async function generateRosterDecision(ai, model, prompt, debug) {
-  const response = await ai.models.generateContent({
-    model,
-    contents: prompt,
-    config: {
-      tools: [{ googleSearch: {} }],
-      responseFormat: {
-        text: {
-          mimeType: "application/json",
-          schema: ROSTER_DECISION_SCHEMA
-        }
-      },
-      temperature: 0.3
-    }
-  });
-  debug(`Gemini roster raw (${model}): ${String(response.text || "").slice(0, 400)}`);
-  return response.text;
 }
 
 export async function predictLineupDecision(apiKey, context, options = {}) {
@@ -455,34 +458,21 @@ export async function predictLineupDecision(apiKey, context, options = {}) {
   });
 
   const prompt = buildPrompt({ ...context, todayStr });
-  let model = defaultModel;
-
   try {
-    let rawText = await generateDecision(ai, model, prompt, onDebug);
-    let decision;
-    try {
-      decision = tryParseDecision(rawText);
-    } catch {
-      decision = await repairDecision(ai, rawText);
-    }
-
-    if (needsEscalation(decision)) {
-      onDebug(`Escalating to ${escalationModel}`);
-      model = escalationModel;
-      const escalationPrompt = `${prompt}
-
-Extra: vorige analyse was te onzeker. Wees grondiger en kies de meest waarschijnlijke lineup voor dit ritprofiel.`;
-      rawText = await generateDecision(ai, model, escalationPrompt, onDebug);
-      try {
-        decision = tryParseDecision(rawText);
-      } catch {
-        decision = await repairDecision(ai, rawText);
-      }
-      decision.escalated = true;
-    }
-
-    decision.model = model;
-    return decision;
+    return await predictWithEscalation({
+      ai,
+      defaultModel,
+      escalationModel,
+      prompt,
+      schema: MANAGER_DECISION_SCHEMA,
+      repairFn: repairDecision,
+      generateFn: generateDecision,
+      needsEscalationFn: needsEscalation,
+      normalizeFn: (decision) => decision,
+      escalationSuffix:
+        "Extra: vorige analyse was te onzeker. Wees grondiger en kies de meest waarschijnlijke lineup voor dit ritprofiel.",
+      onDebug
+    });
   } catch (error) {
     onDebug(`Prediction failed: ${error instanceof Error ? error.message : String(error)}`);
     return null;
