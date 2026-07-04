@@ -28,7 +28,7 @@
 	);
 </script>
 
-<section class="card sticky top-4">
+<section class="card">
 	<div class="mb-3 flex items-center justify-between gap-2">
 		<h3 class="text-base font-semibold text-slate-100">Wat wil je doen?</h3>
 		<button
