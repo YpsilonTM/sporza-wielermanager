@@ -5,6 +5,7 @@ import { importLegacyDataIfNeeded, runDatabaseMigrations } from '$lib/server/mig
 import { startScheduler } from '$lib/server/scheduler';
 import { runAutoManage } from '$lib/server/jobs';
 import { pinoLogger } from '$lib/server/logger';
+import { isDashboardAuthorized, isProtectedDashboardPath } from '$lib/server/dashboard-auth';
 
 export const init: ServerInit = async () => {
 	if (building) return;
@@ -35,6 +36,10 @@ export const handle: Handle = async ({ event, resolve }) => {
 		event.url.pathname = '/api/run/roster';
 	} else if (event.url.pathname === '/health') {
 		event.url.pathname = '/api/health';
+	}
+
+	if (isProtectedDashboardPath(event.url.pathname) && !isDashboardAuthorized(event.request, event.cookies)) {
+		return new Response('Unauthorized', { status: 401 });
 	}
 
 	return resolve(event);

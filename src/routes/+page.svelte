@@ -5,11 +5,18 @@
 	import StagePanel from '$lib/components/StagePanel.svelte';
 	import ActionBar from '$lib/components/ActionBar.svelte';
 	import LogPanel from '$lib/components/LogPanel.svelte';
+	import DecisionHistory from '$lib/components/DecisionHistory.svelte';
+	import SimulatePreview from '$lib/components/SimulatePreview.svelte';
+	import { dashboardFetch, dashboardLogsUrl } from '$lib/dashboard-api';
 	import type { OverviewData } from '$lib/types/overview';
+	import type { ManagePreviewView, PreviewSubmitPayload, RosterPreviewView } from '$lib/types/preview';
 	import type LogPanelComponent from '$lib/components/LogPanel.svelte';
+	import type DecisionHistoryComponent from '$lib/components/DecisionHistory.svelte';
 	import type { SseEvent } from '$lib/types/sse';
 
 	const AUTO_MANAGE_WINDOW_MS = 60 * 60 * 1000;
+
+	let { data } = $props();
 
 	let connectionStatus = $state('Verbinden met log stream...');
 	let authBusy = $state(false);
@@ -18,18 +25,40 @@
 	let overviewError = $state('');
 	let jobBusy = $state(false);
 	let jobBusyLabel = $state('');
+	let allowTransfers = $state(false);
 	let previewSummary = $state('');
 	let previewReasoning = $state('');
+	let previewSubmitted = $state(false);
+	let managePreview = $state<ManagePreviewView | null>(null);
+	let rosterPreview = $state<RosterPreviewView | null>(null);
+	let submitPayload = $state<PreviewSubmitPayload | null>(null);
+	let submitBusy = $state(false);
 	let logPanel: LogPanelComponent | undefined = $state();
+	let decisionHistory: DecisionHistoryComponent | undefined = $state();
+
+	const dashboardKey = $derived(data.dashboardKey);
+	const logsUrl = $derived(dashboardLogsUrl(dashboardKey));
+	const showPreview = $derived(
+		Boolean(previewSummary || previewReasoning || managePreview || rosterPreview)
+	);
+
+	function clearPreview() {
+		previewSummary = '';
+		previewReasoning = '';
+		previewSubmitted = false;
+		managePreview = null;
+		rosterPreview = null;
+		submitPayload = null;
+	}
 
 	async function loadOverview() {
 		overviewLoading = true;
 		overviewError = '';
 		try {
-			const res = await fetch('/api/overview');
-			const data = await res.json();
-			if (!res.ok) throw new Error(data.error || 'Kon overzicht niet laden.');
-			overview = data;
+			const res = await dashboardFetch(dashboardKey, '/api/overview');
+			const payload = await res.json();
+			if (!res.ok) throw new Error(payload.error || 'Kon overzicht niet laden.');
+			overview = payload;
 		} catch (err) {
 			overviewError = err instanceof Error ? err.message : 'Onbekende fout';
 			overview = null;
@@ -38,11 +67,23 @@
 		}
 	}
 
+	function refreshDashboard() {
+		loadOverview();
+		decisionHistory?.refresh();
+	}
+
+	const canSubmitPreview = $derived(Boolean(!previewSubmitted && submitPayload));
+
 	function applyManage(data: Extract<SseEvent, { type: 'manage' }>) {
 		jobBusy = false;
 		jobBusyLabel = '';
+		submitBusy = false;
 		previewSummary = data.summary;
 		previewReasoning = data.reasoning || '';
+		previewSubmitted = data.submitted;
+		managePreview = data.preview ?? null;
+		rosterPreview = null;
+		submitPayload = data.submitted ? null : (data.submit ?? null);
 	}
 
 	function handleManageFailed(data: Extract<SseEvent, { type: 'manage-failed' }>) {
@@ -54,8 +95,51 @@
 	function applyRoster(data: Extract<SseEvent, { type: 'roster' }>) {
 		jobBusy = false;
 		jobBusyLabel = '';
+		submitBusy = false;
 		previewSummary = data.summary;
 		previewReasoning = data.reasoning || '';
+		previewSubmitted = data.submitted;
+		rosterPreview = data.preview ?? null;
+		managePreview = null;
+		submitPayload = data.submitted ? null : (data.submit ?? null);
+	}
+
+	function handleRosterFailed(data: Extract<SseEvent, { type: 'roster-failed' }>) {
+		jobBusy = false;
+		jobBusyLabel = '';
+		logPanel?.addLog(`❌ Ploeg mislukt${data.reason ? `: ${data.reason}` : ''}`, 30);
+	}
+
+	async function submitPreview() {
+		if (!submitPayload) return;
+
+		const label =
+			submitPayload.kind === 'roster'
+				? 'Dit ploegvoorstel indienen bij Sporza?'
+				: `Dit lineup-voorstel indienen voor ${submitPayload.matchName ?? 'deze rit'}?`;
+
+		if (!confirm(label)) return;
+
+		submitBusy = true;
+		try {
+			const params = allowTransfers ? '?allowTransfers=1' : '';
+			const res = await dashboardFetch(dashboardKey, `/api/run/submit-preview${params}`, {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(submitPayload)
+			});
+			const payload = await res.json();
+			if (!res.ok) throw new Error(payload.error || 'Indienen mislukt.');
+
+			previewSubmitted = true;
+			submitPayload = null;
+			refreshDashboard();
+			logPanel?.addLog('✅ Simulatie ingediend bij Sporza.', 30);
+		} catch (err) {
+			logPanel?.addLog(`❌ ${err instanceof Error ? err.message : 'Indienen mislukt.'}`, 30);
+		} finally {
+			submitBusy = false;
+		}
 	}
 
 	async function runManage(dryRun: boolean) {
@@ -63,17 +147,18 @@
 		if (!matchId) return;
 
 		if (!dryRun) {
-			const label = overview?.ui?.primaryLabel ?? 'deze actie';
-			if (!confirm(`${label} en indienen bij Sporza?`)) return;
+			if (!confirm('Direct indienen bij Sporza zonder preview?')) return;
 		}
 
 		jobBusy = true;
-		jobBusyLabel = dryRun ? 'Simulatie bezig…' : 'Indienen bij Sporza…';
+		jobBusyLabel = dryRun ? 'AI-voorstel maken…' : 'Direct indienen bij Sporza…';
+		clearPreview();
 
 		try {
 			const params = new URLSearchParams({ matchId: String(matchId) });
 			if (dryRun) params.set('dryRun', '1');
-			const res = await fetch(`/api/run/manage?${params}`, { method: 'POST' });
+			if (allowTransfers) params.set('allowTransfers', '1');
+			const res = await dashboardFetch(dashboardKey, `/api/run/manage?${params}`, { method: 'POST' });
 			if (res.status === 202) return;
 			if (!res.ok) {
 				const text = await res.text();
@@ -87,19 +172,21 @@
 	}
 
 	async function runRoster(dryRun: boolean) {
-		if (!dryRun && !confirm('Nieuwe ploeg samenstellen en indienen bij Sporza?')) return;
+		if (!dryRun && !confirm('Direct indienen bij Sporza zonder preview?')) return;
 
 		jobBusy = true;
-		jobBusyLabel = dryRun ? 'Simulatie bezig…' : 'Ploeg indienen…';
+		jobBusyLabel = dryRun ? 'AI-voorstel maken…' : 'Direct indienen bij Sporza…';
+		clearPreview();
 
 		try {
-			const params = dryRun ? '?dryRun=1' : '';
-			const res = await fetch(`/api/run/roster${params}`, { method: 'POST' });
-			const data = await res.json();
-			if (!res.ok) throw new Error(data.error || 'Ploeg samenstellen mislukt.');
-			if (dryRun) {
-				jobBusy = false;
-				jobBusyLabel = '';
+			const params = new URLSearchParams();
+			if (dryRun) params.set('dryRun', '1');
+			const query = params.toString() ? `?${params}` : '';
+			const res = await dashboardFetch(dashboardKey, `/api/run/roster${query}`, { method: 'POST' });
+			if (res.status === 202) return;
+			if (!res.ok) {
+				const payload = await res.json();
+				throw new Error(payload.error || 'Ploeg samenstellen mislukt.');
 			}
 		} catch (err) {
 			jobBusy = false;
@@ -110,24 +197,25 @@
 
 	function handlePrimary() {
 		const action = overview?.ui?.primaryAction;
-		if (action === 'roster_submit') runRoster(false);
-		else if (action === 'manage_submit') runManage(false);
+		if (action === 'roster_simulate') runRoster(true);
+		else if (action === 'manage_simulate') runManage(true);
 	}
 
 	function handleSecondary() {
 		const action = overview?.ui?.primaryAction;
-		if (action === 'roster_submit') runRoster(true);
-		else if (action === 'manage_submit') runManage(true);
+		if (action === 'roster_simulate') runRoster(false);
+		else if (action === 'manage_simulate') runManage(false);
 	}
 
 	async function triggerAuthRefresh() {
 		authBusy = true;
 		try {
-			await fetch('/api/run/auth-refresh', { method: 'POST' });
+			await dashboardFetch(dashboardKey, '/api/run/auth-refresh', { method: 'POST' });
 			logPanel?.addLog('Auth refresh gestart', 30);
 		} finally {
 			setTimeout(() => {
 				authBusy = false;
+				loadOverview();
 			}, 1500);
 		}
 	}
@@ -147,7 +235,12 @@
 		</p>
 	</div>
 	<div class="flex items-center gap-3">
-		<button class="btn-secondary" type="button" disabled={authBusy} onclick={triggerAuthRefresh}>
+		<button
+			class="btn-secondary"
+			type="button"
+			disabled={authBusy || overview?.auth?.canRefresh === false}
+			onclick={triggerAuthRefresh}
+		>
 			🔑 Auth
 		</button>
 		<span class="text-xs text-slate-500">{connectionStatus}</span>
@@ -165,54 +258,49 @@
 
 <LogPanel
 	bind:this={logPanel}
+	{logsUrl}
 	bind:connectionStatus
 	onManage={applyManage}
 	onRoster={applyRoster}
 	onManageFailed={handleManageFailed}
-	onOverviewRefresh={loadOverview}
+	onRosterFailed={handleRosterFailed}
+	onOverviewRefresh={refreshDashboard}
 />
 
 <div class="grid items-start gap-5 lg:grid-cols-[1fr_320px]">
 	<div class="min-w-0 space-y-4">
 		<StagePanel stage={overview?.upcomingMatch ?? null} lineup={overview?.upcomingLineup ?? null} />
 
-		{#if previewSummary || previewReasoning}
-			<details class="card group" open>
-				<summary class="cursor-pointer list-none">
-					<div class="flex items-start justify-between gap-3">
-						<div class="min-w-0">
-							<p class="text-xs font-semibold uppercase tracking-wider text-emerald-400">
-								Laatste AI-resultaat
-							</p>
-							{#if previewSummary}
-								<p class="mt-1 line-clamp-2 text-sm text-slate-400">{previewSummary}</p>
-							{/if}
-						</div>
-						<span class="text-xs text-slate-500 transition group-open:rotate-180">▼</span>
-					</div>
-				</summary>
-				<div class="mt-3 space-y-2 border-t border-slate-700/80 pt-3 text-sm text-slate-400">
-					{#if previewSummary}
-						<p><span class="font-semibold text-slate-300">Samenvatting:</span> {previewSummary}</p>
-					{/if}
-					{#if previewReasoning}
-						<p><span class="font-semibold text-slate-300">Reden:</span> {previewReasoning}</p>
-					{/if}
-				</div>
-			</details>
+		{#if showPreview}
+			<SimulatePreview
+				summary={previewSummary}
+				reasoning={previewReasoning}
+				submitted={previewSubmitted}
+				{managePreview}
+				{rosterPreview}
+				canSubmit={canSubmitPreview}
+				submitBusy={submitBusy}
+				hasPendingTransfer={Boolean(managePreview?.transfer && !managePreview.transfer.executed)}
+				{allowTransfers}
+				onsubmit={submitPreview}
+			/>
 		{/if}
 	</div>
 
-	<aside>
+	<aside class="space-y-4">
 		{#if overview?.ui}
 			<ActionBar
 				ui={overview.ui}
+				transferState={overview.transferState}
+				bind:allowTransfers
 				busy={jobBusy}
 				busyLabel={jobBusyLabel}
 				onprimary={handlePrimary}
 				onsecondary={handleSecondary}
-				onrefresh={loadOverview}
+				onrefresh={refreshDashboard}
 			/>
 		{/if}
+
+		<DecisionHistory bind:this={decisionHistory} {dashboardKey} />
 	</aside>
 </div>

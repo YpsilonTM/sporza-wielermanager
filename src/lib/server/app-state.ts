@@ -1,8 +1,8 @@
 let manageRunning = false;
 let overviewCache: unknown = null;
 let overviewCacheTime = 0;
-const autoManagedMatchIds = new Set<number>();
 const manageInFlight = new Set<number>();
+let rosterRunning = false;
 
 export function getManageRunning(): boolean {
 	return manageRunning;
@@ -26,14 +26,6 @@ export function invalidateOverviewCache(): void {
 	overviewCacheTime = 0;
 }
 
-export function markAutoManaged(matchId: number): void {
-	autoManagedMatchIds.add(matchId);
-}
-
-export function hasAutoManaged(matchId: number): boolean {
-	return autoManagedMatchIds.has(matchId);
-}
-
 export function markManageInFlight(matchId: number): void {
 	manageInFlight.add(matchId);
 }
@@ -44,4 +36,12 @@ export function clearManageInFlight(matchId: number): void {
 
 export function isManageInFlight(matchId: number): boolean {
 	return manageInFlight.has(matchId);
+}
+
+export function getRosterRunning(): boolean {
+	return rosterRunning;
+}
+
+export function setRosterRunning(value: boolean): void {
+	rosterRunning = value;
 }

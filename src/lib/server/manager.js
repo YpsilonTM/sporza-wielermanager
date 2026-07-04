@@ -343,6 +343,13 @@ export async function runManager({
 
   onLog(`AI analyseert lineup voor ${context.match.name} (${context.match.terrainType}, ${context.match.matchType})...`);
 
+  let currentLineup = null;
+  try {
+    currentLineup = await api.fetchMatchLineup(activeCookies(), context.match.id);
+  } catch {
+    currentLineup = null;
+  }
+
   const decision = await predictLineupDecision(
     apiKey,
     {
@@ -480,6 +487,7 @@ export async function runManager({
     decision,
     lineupPayload,
     transferResult,
+    currentLineup,
     submitted: submit
   };
 }

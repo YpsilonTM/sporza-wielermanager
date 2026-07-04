@@ -4,10 +4,10 @@ import { createAuthenticatedApi, runAuthRefresh } from './auth.js';
 import { formatAuthLoginError } from './auth-errors.js';
 import { WielermanagerApiClient } from './wielermanager-api.js';
 import { decodeTurboStream, extractEditionRouteLoader } from './turbo-stream.js';
-import { runManager, runRosterBuilder } from './manager.js';
+import { runManager, runRosterBuilder, buildManagerContext } from './manager.js';
 import { describeLineup } from './lineup.js';
-import { getFreeTransfers } from './rules.js';
-import { areTransfersOpen } from './transfers.js';
+import { getFreeTransfers, validateLineup, lineupToApiPayload, validateRosterIds } from './rules.js';
+import { areTransfersOpen, validateTransfer } from './transfers.js';
 import { pinoLogger, broadcastSse } from './logger';
 import {
 	getManageRunning,
@@ -15,12 +15,17 @@ import {
 	getOverviewCache,
 	setOverviewCache,
 	invalidateOverviewCache,
-	hasAutoManaged,
-	markAutoManaged,
 	markManageInFlight,
 	clearManageInFlight,
-	isManageInFlight
+	isManageInFlight,
+	getRosterRunning,
+	setRosterRunning
 } from './app-state';
+import { wasMatchLineupSubmitted } from './decisions';
+import { canAutoRefreshAuth } from './auth.js';
+import { buildManagePreview, buildRosterPreview, buildLineupSubmitPayload, buildRosterSubmitPayload } from './preview';
+import { notifyWebhook } from './webhook';
+import type { PreviewSubmitPayload } from '$lib/types/preview';
 import { enrichStageForUi } from './overview-enrichment';
 import { buildOverviewUi, mapLineupView, mapRosterView } from './overview-ui';
 import { AUTO_MANAGE_WINDOW_MS } from './config.js';
@@ -110,7 +115,7 @@ export async function fetchOverviewData(): Promise<OverviewData> {
 	const lineupView = upcomingLineup?.riders?.length ? describeLineup(upcomingLineup) : null;
 	const mappedLineup = lineupView ? mapLineupView(lineupView) : null;
 
-	const base: Omit<OverviewData, 'ui'> = {
+	const base: Omit<OverviewData, 'ui' | 'auth'> = {
 		edition: overview.edition,
 		gameStatus: overview.gameStatus,
 		gameRules: overview.gameRules,
@@ -122,6 +127,10 @@ export async function fetchOverviewData(): Promise<OverviewData> {
 
 	return {
 		...base,
+		auth: {
+			valid: Boolean(overview.gameStatus?.user),
+			canRefresh: canAutoRefreshAuth(settings)
+		},
 		ui: buildOverviewUi(base)
 	};
 }
@@ -198,8 +207,8 @@ export async function runAutoManage(): Promise<void> {
 			return;
 		}
 
-		if (hasAutoManaged(match.id)) {
-			pinoLogger.debug(`Skipping ${match.name}: already auto-managed in this session.`);
+		if (await wasMatchLineupSubmitted(match.id)) {
+			pinoLogger.debug(`Skipping ${match.name}: lineup already submitted for this match.`);
 			return;
 		}
 
@@ -217,7 +226,6 @@ export async function runAutoManage(): Promise<void> {
 			}
 		});
 
-		markAutoManaged(match.id);
 		await persistDecision({
 			matchId: match.id,
 			matchName: match.name,
@@ -236,13 +244,35 @@ export async function runAutoManage(): Promise<void> {
 			confidence: result.decision.confidence,
 			reasoning: formatDecisionReasoning(result.decision),
 			submitted: true,
+			autoManaged: true,
+			preview: buildManagePreview({
+				...result,
+				allowTransfers: process.env.ALLOW_AUTO_TRANSFERS === 'true',
+				submitted: true
+			})
+		});
+
+		await notifyWebhook({
+			event: 'auto-manage-success',
+			title: `Auto-manage voltooid: ${match.name}`,
+			message: result.decision.summary,
+			submitted: true,
+			matchId: match.id,
+			matchName: match.name,
 			autoManaged: true
 		});
 
 		invalidateOverviewCache();
 		pinoLogger.info(`✅ Auto-manage voltooid voor ${match.name}.`);
 	} catch (error) {
-		pinoLogger.error(`❌ Auto-manage mislukt: ${error instanceof Error ? error.message : String(error)}`);
+		const message = error instanceof Error ? error.message : String(error);
+		pinoLogger.error(`❌ Auto-manage mislukt: ${message}`);
+		await notifyWebhook({
+			event: 'auto-manage-failed',
+			title: 'Auto-manage mislukt',
+			message,
+			autoManaged: true
+		});
 	} finally {
 		setManageRunning(false);
 	}
@@ -289,6 +319,12 @@ export async function runManageJob(options: {
 		});
 
 		const match = result.context.match;
+		const preview = buildManagePreview({
+			...result,
+			allowTransfers: Boolean(options.allowTransfers),
+			submitted: result.submitted
+		});
+
 		await persistDecision({
 			matchId: match.id,
 			matchName: match.name,
@@ -307,16 +343,35 @@ export async function runManageJob(options: {
 			confidence: result.decision.confidence,
 			reasoning: formatDecisionReasoning(result.decision),
 			submitted: result.submitted,
-			autoManaged: false
+			autoManaged: false,
+			preview,
+			submit: result.submitted ? undefined : buildLineupSubmitPayload(result)
+		});
+
+		await notifyWebhook({
+			event: result.submitted ? 'manage-success' : 'manage-simulated',
+			title: result.submitted ? `Lineup ingediend: ${match.name}` : `Lineup simulatie: ${match.name}`,
+			message: result.decision.summary,
+			submitted: result.submitted,
+			matchId: match.id,
+			matchName: match.name
 		});
 
 		invalidateOverviewCache();
 		return { accepted: true, matchId: match.id };
 	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
 		broadcastSse({
 			type: 'manage-failed',
 			matchId,
-			reason: error instanceof Error ? error.message : String(error)
+			reason: message
+		});
+		await notifyWebhook({
+			event: 'manage-failed',
+			title: 'Lineup mislukt',
+			message,
+			matchId,
+			matchName: undefined
 		});
 		throw error;
 	} finally {
@@ -331,41 +386,202 @@ export async function runRosterJob(options: {
 	submit?: boolean;
 	force?: boolean;
 }): Promise<void> {
+	if (getRosterRunning()) {
+		pinoLogger.debug('Skipping overlapping roster run.');
+		return;
+	}
+
+	setRosterRunning(true);
 	const settings = getSettings();
 	const dryRun = Boolean(options.dryRun);
 	const submit = options.submit !== false && !dryRun;
+	const onLog = createOnLog();
+
+	try {
+		const { api, getCookies } = await createAuthenticatedApi(settings, {
+			onAuthRefresh: (message) => pinoLogger.info(message)
+		});
+
+		const result = await runRosterBuilder({
+			settings,
+			api,
+			getCookies,
+			decodeTurboStream,
+			extractEditionRouteLoader,
+			options: {
+				dryRun,
+				submit,
+				force: Boolean(options.force),
+				onLog
+			}
+		});
+
+		const preview = buildRosterPreview(result);
+
+		await persistDecision({
+			decisionType: 'roster',
+			summary: result.decision?.summary ?? 'Roster bijgewerkt',
+			reasoning: formatDecisionReasoning(result.decision),
+			submitted: result.submitted
+		});
+
+		broadcastSse({
+			type: 'roster',
+			summary: result.decision?.summary ?? 'Roster bijgewerkt',
+			reasoning: formatDecisionReasoning(result.decision),
+			submitted: result.submitted,
+			preview,
+			submit: result.submitted ? undefined : buildRosterSubmitPayload(result)
+		});
+
+		await notifyWebhook({
+			event: result.submitted ? 'roster-success' : 'roster-simulated',
+			title: result.submitted ? 'Ploeg ingediend' : 'Ploeg simulatie',
+			message: result.decision?.summary ?? 'Roster bijgewerkt',
+			submitted: result.submitted
+		});
+
+		invalidateOverviewCache();
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		broadcastSse({
+			type: 'roster-failed',
+			reason: message
+		});
+		await notifyWebhook({
+			event: 'roster-failed',
+			title: 'Ploeg samenstellen mislukt',
+			message
+		});
+		throw error;
+	} finally {
+		setRosterRunning(false);
+	}
+}
+
+export async function submitPreviewJob(
+	payload: PreviewSubmitPayload,
+	options: { allowTransfers?: boolean } = {}
+): Promise<void> {
+	const settings = getSettings();
 	const onLog = createOnLog();
 
 	const { api, getCookies } = await createAuthenticatedApi(settings, {
 		onAuthRefresh: (message) => pinoLogger.info(message)
 	});
 
-	const result = await runRosterBuilder({
-		settings,
-		api,
-		getCookies,
-		decodeTurboStream,
-		extractEditionRouteLoader,
-		options: {
-			dryRun,
-			submit,
-			force: Boolean(options.force),
-			onLog
+	if (payload.kind === 'roster') {
+		if (!payload.cyclistIds?.length) {
+			throw new Error('Geen ploeg om in te dienen.');
 		}
-	});
+
+		const context = await buildManagerContext(
+			api,
+			getCookies(),
+			decodeTurboStream,
+			extractEditionRouteLoader
+		);
+		const validation = validateRosterIds(payload.cyclistIds, context.allCyclists, context.gameRules);
+		if (!validation.valid) {
+			throw new Error(`Ongeldige ploeg: ${validation.errors.join('; ')}`);
+		}
+
+		onLog('Simulatie indienen — ploeg opslaan bij Sporza...');
+		await api.saveRoster(getCookies(), payload.cyclistIds);
+
+		await persistDecision({
+			decisionType: 'roster',
+			summary: payload.summary ?? 'Roster ingediend vanuit simulatie',
+			confidence: payload.confidence,
+			submitted: true
+		});
+
+		broadcastSse({
+			type: 'roster',
+			summary: payload.summary ?? 'Roster ingediend vanuit simulatie',
+			submitted: true
+		});
+
+		await notifyWebhook({
+			event: 'roster-success',
+			title: 'Ploeg ingediend (simulatie)',
+			message: payload.summary ?? 'Roster ingediend vanuit simulatie',
+			submitted: true
+		});
+
+		invalidateOverviewCache();
+		return;
+	}
+
+	if (payload.kind !== 'lineup' || !payload.matchId || !payload.lineup?.length) {
+		throw new Error('Geen lineup om in te dienen.');
+	}
+
+	const context = await buildManagerContext(
+		api,
+		getCookies(),
+		decodeTurboStream,
+		extractEditionRouteLoader
+	);
+
+	let roster = context.roster ?? [];
+	const transferState = await api.fetchTransferState(getCookies());
+	const transfersOpen = areTransfersOpen(context.gameStatus, context.overview?.edition);
+
+	if (payload.transfer && transfersOpen) {
+		if (!options.allowTransfers) {
+			onLog('Transfer uit simulatie overgeslagen — niet ingeschakeld.', 'warn');
+		} else {
+			const transferResult = validateTransfer(
+				payload.transfer,
+				roster,
+				context.allCyclists,
+				context.gameRules,
+				transferState.usedTransfers
+			);
+			if (!transferResult.valid) {
+				throw new Error(`Transfer ongeldig: ${transferResult.errors.join('; ')}`);
+			}
+			onLog('Transfer uit simulatie indienen...');
+			await api.createTransfer(getCookies(), payload.transfer.ridersIn, payload.transfer.ridersOut);
+			roster = transferResult.nextRoster;
+			onLog('Transfer uitgevoerd.');
+		}
+	}
+
+	const lineupValidation = validateLineup(payload.lineup, roster, context.gameRules);
+	if (!lineupValidation.valid) {
+		throw new Error(`Ongeldige lineup: ${lineupValidation.errors.join('; ')}`);
+	}
+
+	onLog(`Simulatie indienen — lineup opslaan voor ${payload.matchName ?? payload.matchId}...`);
+	await api.saveLineup(getCookies(), payload.matchId, lineupToApiPayload(payload.lineup));
 
 	await persistDecision({
-		decisionType: 'roster',
-		summary: result.decision?.summary ?? 'Roster bijgewerkt',
-		reasoning: formatDecisionReasoning(result.decision),
-		submitted: result.submitted
+		matchId: payload.matchId,
+		matchName: payload.matchName ?? null,
+		decisionType: 'lineup',
+		summary: payload.summary ?? 'Lineup ingediend vanuit simulatie',
+		confidence: payload.confidence,
+		submitted: true
 	});
 
 	broadcastSse({
-		type: 'roster',
-		summary: result.decision?.summary ?? 'Roster bijgewerkt',
-		reasoning: formatDecisionReasoning(result.decision),
-		submitted: result.submitted
+		type: 'manage',
+		matchId: payload.matchId,
+		matchName: payload.matchName ?? `Rit ${payload.matchId}`,
+		summary: payload.summary ?? 'Lineup ingediend vanuit simulatie',
+		confidence: payload.confidence,
+		submitted: true
+	});
+
+	await notifyWebhook({
+		event: 'manage-success',
+		title: `Lineup ingediend (simulatie): ${payload.matchName ?? payload.matchId}`,
+		message: payload.summary ?? 'Lineup ingediend vanuit simulatie',
+		submitted: true,
+		matchId: payload.matchId,
+		matchName: payload.matchName
 	});
 
 	invalidateOverviewCache();

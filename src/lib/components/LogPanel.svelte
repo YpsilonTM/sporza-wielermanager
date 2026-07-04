@@ -7,6 +7,7 @@
 		/skipping overlapping auto-manage/i,
 		/not in auto window yet/i,
 		/already auto-managed in this session/i,
+		/lineup already submitted for this match/i,
 		/session valid \(\d+ cookies\)/i,
 		/cookie cache:/i,
 		/wielermanager_cookie_header:/i,
@@ -22,16 +23,20 @@
 	}
 
 	let {
+		logsUrl = '/api/logs',
 		connectionStatus = $bindable('Verbinden met log stream...'),
 		onManage = () => {},
 		onRoster = () => {},
 		onManageFailed = () => {},
+		onRosterFailed = () => {},
 		onOverviewRefresh = () => {}
 	}: {
+		logsUrl?: string;
 		connectionStatus?: string;
 		onManage?: (data: Extract<SseEvent, { type: 'manage' }>) => void;
 		onRoster?: (data: Extract<SseEvent, { type: 'roster' }>) => void;
 		onManageFailed?: (data: Extract<SseEvent, { type: 'manage-failed' }>) => void;
+		onRosterFailed?: (data: Extract<SseEvent, { type: 'roster-failed' }>) => void;
 		onOverviewRefresh?: () => void;
 	} = $props();
 
@@ -69,7 +74,7 @@
 	);
 
 	onMount(() => {
-		const es = new EventSource('/api/logs');
+		const es = new EventSource(logsUrl);
 
 		es.onopen = () => {
 			connectionStatus = '🟢 Verbonden';
@@ -111,6 +116,12 @@
 			if (data.type === 'manage-failed') {
 				expanded = true;
 				onManageFailed(data);
+				return;
+			}
+
+			if (data.type === 'roster-failed') {
+				expanded = true;
+				onRosterFailed(data);
 			}
 		};
 

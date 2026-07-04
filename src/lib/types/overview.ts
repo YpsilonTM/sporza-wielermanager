@@ -45,6 +45,11 @@ export interface TransferStateView {
 	transfersOpen: boolean;
 }
 
+export interface AuthStatusView {
+	valid: boolean;
+	canRefresh: boolean;
+}
+
 export type OverviewPhase =
 	| 'build_squad'
 	| 'pre_race'
@@ -84,5 +89,6 @@ export interface OverviewData {
 	upcomingLineup: LineupView | null;
 	rosterPreview: RosterRiderView[];
 	transferState: TransferStateView | null;
+	auth: AuthStatusView;
 	ui: OverviewUiState;
 }

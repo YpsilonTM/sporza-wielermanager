@@ -76,36 +76,30 @@ export function buildOverviewUi(data: Omit<OverviewData, 'ui'>): OverviewUiState
 
 	if (!rosterComplete) {
 		phase = 'build_squad';
-		primaryAction = 'roster_submit';
-		primaryLabel = 'AI ploeg samenstellen';
-		primaryDescription = `Je ploeg telt ${rosterCount}/${squadSize} renners. Stel eerst een volledige ploeg samen.`;
+		primaryAction = 'roster_simulate';
+		primaryLabel = 'AI ploegvoorstel maken';
+		primaryDescription = `Je ploeg telt ${rosterCount}/${squadSize} renners. AI stelt een voorstel samen — bekijk de diff en dien daarna in.`;
 		showRosterActions = true;
 	} else if (preRaceSquadWindow) {
 		phase = 'pre_race';
 		showRosterActions = false;
-		if (lineupSubmitted) {
-			primaryAction = 'manage_submit';
-			primaryLabel = 'Ploeg & lineup opnieuw instellen';
-			primaryDescription =
-				'Vóór rit 1 kun je gratis wisselen. AI controleert gezondheid, past je ploeg aan en werkt je lineup bij.';
-		} else {
-			primaryAction = 'manage_submit';
-			primaryLabel = 'Ploeg checken & lineup instellen';
-			primaryDescription =
-				'Vóór rit 1 kun je gratis wisselen. AI controleert blessures, past je ploeg aan en dient je lineup in.';
-		}
+		primaryAction = 'manage_simulate';
+		primaryLabel = lineupSubmitted ? 'Nieuw AI-voorstel maken' : 'AI-voorstel maken';
+		primaryDescription =
+			'Vóór rit 1 kun je gratis wisselen. AI checkt gezondheid en stelt ploeg + lineup voor — jij keurt goed via de diff.';
 	} else if (match && !lineupSubmitted) {
 		phase = 'needs_lineup';
 		showRosterActions = false;
-		primaryAction = 'manage_submit';
-		primaryLabel = 'Lineup instellen met AI';
-		primaryDescription = `Kies starters, kapitein en bank voor ${match.name}.`;
+		primaryAction = 'manage_simulate';
+		primaryLabel = 'AI lineup-voorstel maken';
+		primaryDescription = `AI stelt starters, kapitein en bank voor voor ${match.name}. Bekijk de diff en dien in wanneer je klaar bent.`;
 	} else if (match && lineupSubmitted) {
 		phase = 'lineup_ready';
 		showRosterActions = false;
-		primaryAction = 'manage_submit';
-		primaryLabel = 'Lineup bijwerken met AI';
-		primaryDescription = 'Er staat al een lineup ingediend. AI kan een nieuw voorstel maken en indienen.';
+		primaryAction = 'manage_simulate';
+		primaryLabel = 'Nieuw AI-voorstel maken';
+		primaryDescription =
+			'Er staat al een lineup ingediend. AI maakt een nieuw voorstel — bekijk de wijzigingen voor je indient.';
 	} else {
 		phase = 'idle';
 		showRosterActions = false;
@@ -119,7 +113,7 @@ export function buildOverviewUi(data: Omit<OverviewData, 'ui'>): OverviewUiState
 		primaryAction,
 		primaryLabel,
 		primaryDescription,
-		secondaryLabel: 'Simuleer AI-keuze (niet indienen)',
+		secondaryLabel: 'Direct indienen (overslaat preview)',
 		showRosterActions,
 		squadSize,
 		rosterCount,

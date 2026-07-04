@@ -1,8 +1,10 @@
 <script lang="ts">
-	import type { OverviewUiState } from '$lib/types/overview';
+	import type { OverviewUiState, TransferStateView } from '$lib/types/overview';
 
 	let {
 		ui,
+		transferState = null,
+		allowTransfers = $bindable(false),
 		busy = false,
 		busyLabel = '',
 		onprimary,
@@ -10,12 +12,20 @@
 		onrefresh
 	}: {
 		ui: OverviewUiState;
+		transferState?: TransferStateView | null;
+		allowTransfers?: boolean;
 		busy?: boolean;
 		busyLabel?: string;
 		onprimary?: () => void;
 		onsecondary?: () => void;
 		onrefresh?: () => void;
 	} = $props();
+
+	const showTransferToggle = $derived(
+		ui.transfersOpen &&
+			!ui.preRaceSquadWindow &&
+			(ui.primaryAction === 'manage_simulate' || ui.primaryAction === 'manage_submit')
+	);
 </script>
 
 <section class="card sticky top-4">
@@ -33,6 +43,21 @@
 
 	<p class="mb-4 text-sm leading-relaxed text-slate-400">{ui.primaryDescription}</p>
 
+	{#if showTransferToggle && transferState}
+		<div class="mb-4 rounded-lg border border-slate-800 bg-slate-950/50 p-3">
+			<label class="flex cursor-pointer items-start gap-2 text-sm text-slate-300">
+				<input class="mt-0.5 accent-emerald-500" type="checkbox" bind:checked={allowTransfers} />
+				<span>
+					Transfer toestaan bij indienen
+					<span class="mt-1 block text-xs text-slate-500">
+						{transferState.freeTransfersRemaining} gratis resterend · €{transferState.remainingBudget}M
+						budget
+					</span>
+				</span>
+			</label>
+		</div>
+	{/if}
+
 	{#if ui.primaryAction}
 		<button class="btn-primary mb-3 w-full !py-3" type="button" disabled={busy} onclick={onprimary}>
 			{#if busy}
@@ -44,7 +69,7 @@
 		</button>
 
 		<button
-			class="w-full text-sm text-slate-400 underline underline-offset-2 transition hover:text-slate-200 disabled:opacity-40"
+			class="w-full text-sm text-slate-500 underline underline-offset-2 transition hover:text-slate-300 disabled:opacity-40"
 			type="button"
 			disabled={busy}
 			onclick={onsecondary}
@@ -57,7 +82,11 @@
 
 	{#if busy}
 		<p class="mt-3 text-xs text-amber-300/90">
-			AI werkt… resultaat verschijnt in de live logs (1–2 min).
+			AI werkt… het voorstel verschijnt in de diff (1–2 min).
+		</p>
+	{:else if ui.primaryAction === 'manage_simulate' || ui.primaryAction === 'roster_simulate'}
+		<p class="mt-3 text-xs text-slate-500">
+			Daarna kun je in de diff op <span class="text-slate-300">Voorstel indienen</span> klikken.
 		</p>
 	{/if}
 </section>

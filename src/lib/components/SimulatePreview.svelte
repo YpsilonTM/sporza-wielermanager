@@ -1,0 +1,221 @@
+<script lang="ts">
+	import RiderAvatar from '$lib/components/RiderAvatar.svelte';
+	import type { ManagePreviewView, RosterPreviewView } from '$lib/types/preview';
+
+	let {
+		summary = '',
+		reasoning = '',
+		submitted = false,
+		managePreview = null,
+		rosterPreview = null,
+		canSubmit = false,
+		submitBusy = false,
+		hasPendingTransfer = false,
+		allowTransfers = false,
+		onsubmit
+	}: {
+		summary?: string;
+		reasoning?: string;
+		submitted?: boolean;
+		managePreview?: ManagePreviewView | null;
+		rosterPreview?: RosterPreviewView | null;
+		canSubmit?: boolean;
+		submitBusy?: boolean;
+		hasPendingTransfer?: boolean;
+		allowTransfers?: boolean;
+		onsubmit?: () => void;
+	} = $props();
+
+	function changeClass(change: string): string {
+		if (change === 'removed') return 'text-red-300';
+		if (change === 'added' || change === 'starter') return 'text-emerald-300';
+		if (change === 'bench') return 'text-amber-300';
+		return 'text-sky-300';
+	}
+
+	function changeLabel(change: string): string {
+		if (change === 'removed') return 'eruit';
+		if (change === 'added') return 'nieuw';
+		if (change === 'starter') return 'starter';
+		if (change === 'bench') return 'bank';
+		return 'wijziging';
+	}
+</script>
+
+<details class="card group" open>
+	<summary class="cursor-pointer list-none">
+		<div class="flex items-start justify-between gap-3">
+			<div class="min-w-0">
+				<p class="text-xs font-semibold uppercase tracking-wider text-emerald-400">
+					{submitted ? 'AI-resultaat' : 'Simulatie'}
+					{#if !submitted}
+						<span class="ml-2 text-amber-300">(niet ingediend)</span>
+					{/if}
+				</p>
+				{#if summary}
+					<p class="mt-1 line-clamp-2 text-sm text-slate-400">{summary}</p>
+				{/if}
+			</div>
+			<span class="text-xs text-slate-500 transition group-open:rotate-180">▼</span>
+		</div>
+	</summary>
+
+	<div class="mt-3 space-y-4 border-t border-slate-700/80 pt-3">
+		{#if summary}
+			<p class="text-sm text-slate-400">
+				<span class="font-semibold text-slate-300">Samenvatting:</span>
+				{summary}
+			</p>
+		{/if}
+
+		{#if managePreview?.transfer}
+			<div class="rounded-lg border border-amber-800/50 bg-amber-950/20 p-3">
+				<p class="text-xs font-semibold uppercase tracking-wider text-amber-300">Transfer</p>
+				<div class="mt-2 grid gap-2 text-sm sm:grid-cols-2">
+					<div>
+						<p class="text-xs text-slate-500">Eruit</p>
+						<ul class="mt-1 space-y-1">
+							{#each managePreview.transfer.ridersOut as rider (rider.id)}
+								<li class="text-red-300">− {rider.name}</li>
+							{/each}
+						</ul>
+					</div>
+					<div>
+						<p class="text-xs text-slate-500">Erin</p>
+						<ul class="mt-1 space-y-1">
+							{#each managePreview.transfer.ridersIn as rider (rider.id)}
+								<li class="text-emerald-300">+ {rider.name}</li>
+							{/each}
+						</ul>
+					</div>
+				</div>
+				<p class="mt-2 text-xs text-slate-400">
+					Kost: {managePreview.transfer.cost <= 0 ? 'gratis' : `€${managePreview.transfer.cost}M`}
+					{#if managePreview.transfer.executed}
+						· <span class="text-emerald-300">uitgevoerd</span>
+					{:else}
+						· <span class="text-amber-300">niet uitgevoerd</span>
+					{/if}
+				</p>
+				{#if managePreview.transfer.reasoning}
+					<p class="mt-1 text-xs text-slate-500">{managePreview.transfer.reasoning}</p>
+				{/if}
+			</div>
+		{/if}
+
+		{#if managePreview && managePreview.changes.length > 0}
+			<div>
+				<p class="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+					Lineup wijzigingen ({managePreview.changes.length})
+				</p>
+				<ul class="space-y-1.5">
+					{#each managePreview.changes as change (change.id)}
+						<li class="flex flex-wrap items-center gap-2 rounded-lg bg-slate-950/50 px-3 py-2 text-sm">
+							<span class="font-medium text-slate-100">{change.name}</span>
+							<span class="text-xs text-slate-500">
+								{change.from ?? '—'} → {change.to ?? '—'}
+							</span>
+							<span class="chip text-[0.65rem] {changeClass(change.change)} bg-slate-900 ring-slate-700">
+								{changeLabel(change.change)}
+							</span>
+						</li>
+					{/each}
+				</ul>
+			</div>
+		{/if}
+
+		{#if managePreview}
+			<div class="grid gap-3 sm:grid-cols-2">
+				<div>
+					<p class="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Huidig</p>
+					{#if managePreview.currentLineup}
+						<ul class="space-y-1 text-xs text-slate-400">
+							{#each managePreview.currentLineup.starters as rider (rider.id)}
+								<li>{rider.name} · {rider.role === 'CAPTAIN' ? 'Kapitein' : 'Starter'}</li>
+							{/each}
+							{#each managePreview.currentLineup.bench as rider (rider.id)}
+								<li class="text-slate-500">{rider.name} · Bank</li>
+							{/each}
+						</ul>
+					{:else}
+						<p class="text-xs text-slate-500">Geen ingediende lineup.</p>
+					{/if}
+				</div>
+				<div>
+					<p class="mb-2 text-xs font-semibold uppercase tracking-wider text-emerald-500">Voorstel</p>
+					<ul class="space-y-1 text-xs text-slate-300">
+						{#each managePreview.proposedLineup.starters as rider (rider.id)}
+							<li>{rider.name} · {rider.role === 'CAPTAIN' ? 'Kapitein' : 'Starter'}</li>
+						{/each}
+						{#each managePreview.proposedLineup.bench as rider (rider.id)}
+							<li class="text-slate-400">{rider.name} · Bank</li>
+						{/each}
+					</ul>
+				</div>
+			</div>
+		{/if}
+
+		{#if rosterPreview && (rosterPreview.added.length > 0 || rosterPreview.removed.length > 0)}
+			<div class="grid gap-3 sm:grid-cols-2">
+				{#if rosterPreview.removed.length > 0}
+					<div>
+						<p class="mb-2 text-xs font-semibold uppercase tracking-wider text-red-400">Eruit</p>
+						<ul class="space-y-1.5">
+							{#each rosterPreview.removed as rider (rider.id)}
+								<li class="flex items-center gap-2 text-sm text-red-300">
+									<RiderAvatar jerseyUrl={rider.jerseyUrl} name={rider.name} size="sm" />
+									<span>{rider.name}</span>
+								</li>
+							{/each}
+						</ul>
+					</div>
+				{/if}
+				{#if rosterPreview.added.length > 0}
+					<div>
+						<p class="mb-2 text-xs font-semibold uppercase tracking-wider text-emerald-400">Erin</p>
+						<ul class="space-y-1.5">
+							{#each rosterPreview.added as rider (rider.id)}
+								<li class="flex items-center gap-2 text-sm text-emerald-300">
+									<RiderAvatar jerseyUrl={rider.jerseyUrl} name={rider.name} size="sm" />
+									<span>{rider.name}</span>
+								</li>
+							{/each}
+						</ul>
+					</div>
+				{/if}
+			</div>
+			<p class="text-xs text-slate-500">{rosterPreview.unchangedCount} renners ongewijzigd.</p>
+		{/if}
+
+		{#if reasoning}
+			<p class="text-sm text-slate-400">
+				<span class="font-semibold text-slate-300">Reden:</span>
+				{reasoning}
+			</p>
+		{/if}
+
+		{#if canSubmit && !submitted}
+			<div class="border-t border-slate-700/80 pt-3">
+				{#if hasPendingTransfer && !allowTransfers}
+					<p class="mb-2 text-xs text-amber-300">
+						Simulatie bevat een transfer. Vink “Transfer toestaan” aan in de sidebar om die
+						mee te sturen.
+					</p>
+				{/if}
+				<button
+					class="btn-primary w-full !py-3"
+					type="button"
+					disabled={submitBusy}
+					onclick={onsubmit}
+				>
+					{#if submitBusy}
+						<span class="spinner" aria-hidden="true"></span>
+						Indienen bij Sporza…
+					{:else}
+						Voorstel indienen bij Sporza
+					{/if}
+				</button>
+			</div>
+		{/if}
+	</div>
+</details>

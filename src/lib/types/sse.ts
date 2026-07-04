@@ -1,3 +1,5 @@
+import type { ManagePreviewView, PreviewSubmitPayload, RosterPreviewView } from '$lib/types/preview';
+
 export interface SseLogEvent {
 	type: 'log';
 	level: number;
@@ -9,10 +11,12 @@ export interface SseManageEvent {
 	matchId: number;
 	matchName: string;
 	summary: string;
-	confidence?: number;
+	confidence?: number | string;
 	reasoning?: string;
 	submitted: boolean;
 	autoManaged?: boolean;
+	preview?: ManagePreviewView;
+	submit?: PreviewSubmitPayload;
 }
 
 export interface SseRosterEvent {
@@ -20,6 +24,8 @@ export interface SseRosterEvent {
 	summary: string;
 	submitted: boolean;
 	reasoning?: string;
+	preview?: RosterPreviewView;
+	submit?: PreviewSubmitPayload;
 }
 
 export interface SseManageFailedEvent {
@@ -28,4 +34,14 @@ export interface SseManageFailedEvent {
 	reason?: string;
 }
 
-export type SseEvent = SseLogEvent | SseManageEvent | SseRosterEvent | SseManageFailedEvent;
+export interface SseRosterFailedEvent {
+	type: 'roster-failed';
+	reason?: string;
+}
+
+export type SseEvent =
+	| SseLogEvent
+	| SseManageEvent
+	| SseRosterEvent
+	| SseManageFailedEvent
+	| SseRosterFailedEvent;

@@ -12,6 +12,16 @@
 {#if overview && ui}
 	<div class="card mb-4 flex flex-wrap gap-x-6 gap-y-3">
 		<div>
+			<p class="text-[0.68rem] font-semibold uppercase tracking-wider text-slate-500">Sporza</p>
+			<p class="text-sm font-semibold text-slate-100">
+				{#if overview.auth.valid}
+					<span class="badge-ok">ingelogd</span>
+				{:else}
+					<span class="badge-warn">sessie verlopen</span>
+				{/if}
+			</p>
+		</div>
+		<div>
 			<p class="text-[0.68rem] font-semibold uppercase tracking-wider text-slate-500">Speler</p>
 			<p class="text-sm font-semibold text-slate-100">{gs?.user?.name ?? '—'}</p>
 		</div>
