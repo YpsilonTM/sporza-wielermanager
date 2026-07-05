@@ -1,24 +1,23 @@
 import path from 'node:path';
 import dotenv from 'dotenv';
 import fs from 'node:fs/promises';
-import type { Settings } from '$lib/types/settings';
 
 dotenv.config({ quiet: true });
 
-export function getDataDir(): string {
+export function getDataDir() {
 	const dir = process.env.DATA_DIR || '';
 	return dir ? path.resolve(dir) : process.cwd();
 }
 
-export function getDataPath(filename: string): string {
+export function getDataPath(filename) {
 	return path.join(getDataDir(), filename);
 }
 
-export async function ensureDataDir(): Promise<void> {
+export async function ensureDataDir() {
 	await fs.mkdir(getDataDir(), { recursive: true });
 }
 
-export function getSettings(): Settings {
+export function getSettings() {
 	const editionSlug = process.env.EDITION_SLUG || 'tour-m-26';
 	const baseUrl = 'https://wielermanager.sporza.be';
 
@@ -41,7 +40,7 @@ export function getSettings(): Settings {
 	};
 }
 
-export function getCookiesCachePath(settings: Settings): string {
+export function getCookiesCachePath(settings) {
 	const file = settings.cookiesFile || '.wielermanager_cookies.json';
 	if (path.isAbsolute(file)) {
 		return file;
@@ -49,7 +48,7 @@ export function getCookiesCachePath(settings: Settings): string {
 	return getDataPath(path.basename(file));
 }
 
-export function getDatabaseUrl(): string {
+export function getDatabaseUrl() {
 	const fromEnv = process.env.DATABASE_URL?.trim();
 	if (fromEnv) {
 		return fromEnv;
