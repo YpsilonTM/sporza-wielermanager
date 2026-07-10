@@ -9,7 +9,7 @@
     "preview": "bun --bun run vite preview",
     "start": "bun ./build/index.js",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-    "test": "bun test src/lib/server/rules.test.js src/lib/server/transfers.test.js src/lib/server/format.test.ts",
+    "test": "bun test src/lib/server/rules.test.js src/lib/server/transfers.test.js src/lib/server/format.test.ts src/lib/server/job-side-effects.test.js",
     "typecheck": "bun run check",
     "db:generate": "bunx --bun prisma generate",
     "db:migrate": "bunx --bun prisma migrate dev",

@@ -94,7 +94,12 @@ export async function runAutoManage(): Promise<void> {
 			}
 		});
 
-		const reasoning = formatDecisionReasoning(result.decision);
+		const reasoning = formatDecisionReasoning(result.decision, result.context.allCyclists);
+		const preview = buildManagePreview({
+			...result,
+			allowTransfers: process.env.ALLOW_AUTO_TRANSFERS === 'true',
+			submitted: true
+		});
 
 		await emitJobResult({
 			persist: {
@@ -104,6 +109,7 @@ export async function runAutoManage(): Promise<void> {
 				summary: result.decision.summary,
 				confidence: result.decision.confidence,
 				reasoning,
+				previewJson: JSON.stringify(preview),
 				submitted: true
 			},
 			sse: {
@@ -115,11 +121,7 @@ export async function runAutoManage(): Promise<void> {
 				reasoning,
 				submitted: true,
 				autoManaged: true,
-				preview: buildManagePreview({
-					...result,
-					allowTransfers: process.env.ALLOW_AUTO_TRANSFERS === 'true',
-					submitted: true
-				})
+				preview,
 			},
 			webhook: {
 				event: 'auto-manage-success',
@@ -190,7 +192,7 @@ export async function runManageJob(options: {
 			allowTransfers: Boolean(options.allowTransfers),
 			submitted: result.submitted
 		});
-		const reasoning = formatDecisionReasoning(result.decision);
+		const reasoning = formatDecisionReasoning(result.decision, result.context.allCyclists);
 
 		await emitJobResult({
 			persist: {
@@ -200,6 +202,7 @@ export async function runManageJob(options: {
 				summary: result.decision.summary,
 				confidence: result.decision.confidence,
 				reasoning,
+				previewJson: JSON.stringify(preview),
 				submitted: result.submitted
 			},
 			sse: {
@@ -280,13 +283,14 @@ export async function runRosterJob(options: {
 		});
 
 		const preview = buildRosterPreview(result);
-		const reasoning = formatDecisionReasoning(result.decision);
+		const reasoning = formatDecisionReasoning(result.decision, result.context.allCyclists);
 
 		await emitJobResult({
 			persist: {
 				decisionType: 'roster',
 				summary: result.decision?.summary ?? 'Roster bijgewerkt',
 				reasoning,
+				previewJson: JSON.stringify(preview),
 				submitted: result.submitted
 			},
 			sse: {

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { ChevronDown } from '@lucide/svelte';
 	import RiderAvatar from '$lib/components/RiderAvatar.svelte';
+	import { lineupChangeClass, lineupChangeLabel } from '$lib/lineup-changes';
 	import { formatRoleLabel } from '$lib/format';
 	import type { TransferStateView } from '$lib/types/overview';
 	import type { ManagePreviewView, RosterPreviewView } from '$lib/types/preview';
@@ -30,21 +31,6 @@
 		transferState?: TransferStateView | null;
 		onsubmit?: () => void;
 	} = $props();
-
-	function changeClass(change: string): string {
-		if (change === 'removed') return 'text-red-300';
-		if (change === 'added' || change === 'starter') return 'text-emerald-400';
-		if (change === 'bench') return 'text-amber-300';
-		return 'text-sky-300';
-	}
-
-	function changeLabel(change: string): string {
-		if (change === 'removed') return 'eruit';
-		if (change === 'added') return 'nieuw';
-		if (change === 'starter') return 'starter';
-		if (change === 'bench') return 'bank';
-		return 'wijziging';
-	}
 </script>
 
 <details class="card group" open>
@@ -113,8 +99,8 @@
 							<span class="meta-text">
 								{change.from ?? '—'} → {change.to ?? '—'}
 							</span>
-							<span class="chip text-[0.65rem] {changeClass(change.change)} bg-zinc-900 ring-1 ring-zinc-700">
-								{changeLabel(change.change)}
+							<span class="chip text-[0.65rem] {lineupChangeClass(change.change)} bg-zinc-900 ring-1 ring-zinc-700">
+								{lineupChangeLabel(change.change)}
 							</span>
 						</li>
 					{/each}

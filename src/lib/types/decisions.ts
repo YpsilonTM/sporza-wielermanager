@@ -6,6 +6,7 @@ export interface ManagerDecisionView {
 	summary: string;
 	confidence: number | null;
 	reasoning: string;
+	preview: import('./preview').ManagePreviewView | import('./preview').RosterPreviewView | null;
 	submitted: boolean;
 	submittedAt: string;
 }

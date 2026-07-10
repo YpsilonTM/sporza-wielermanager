@@ -22,6 +22,7 @@ model ManagerDecision {
   summary      String   @default("")
   confidence   Float?
   reasoning    String   @default("")
+  previewJson  String   @default("")
   submitted    Boolean  @default(false)
   submittedAt  DateTime @default(now())
   createdAt    DateTime @default(now())
