@@ -44,7 +44,8 @@ export class WielermanagerApiClient {
       edition: loader.edition ?? null,
       gameStatus: loader.gameStatus ?? null,
       gameRules: loader.gameRules ?? null,
-      personalRanking: loader.personalRanking ?? null
+      personalRanking: loader.personalRanking ?? null,
+      miniCompetitions: loader.miniCompetitions ?? null
     };
   }
 

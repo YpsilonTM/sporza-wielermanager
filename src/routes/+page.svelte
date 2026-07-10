@@ -6,6 +6,7 @@
 	import ActionBar from '$lib/components/ActionBar.svelte';
 	import LogPanel from '$lib/components/LogPanel.svelte';
 	import DecisionHistory from '$lib/components/DecisionHistory.svelte';
+	import MiniCompetitionsPanel from '$lib/components/MiniCompetitionsPanel.svelte';
 	import SimulatePreview from '$lib/components/SimulatePreview.svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import StatusPill from '$lib/components/StatusPill.svelte';
@@ -353,6 +354,11 @@
 				onrefresh={refreshDashboard}
 			/>
 		{/if}
+
+		<MiniCompetitionsPanel
+			competitions={overview?.miniCompetitions ?? []}
+			editionSlug={overview?.editionSlug ?? 'tour-m-26'}
+		/>
 
 		<DecisionHistory bind:this={decisionHistory} {dashboardKey} />
 	</aside>

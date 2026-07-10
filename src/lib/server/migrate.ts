@@ -205,4 +205,37 @@ export async function runDatabaseMigrations(): Promise<void> {
 			resolve();
 		});
 	});
+
+	await runPrismaGenerate();
+}
+
+export async function runPrismaGenerate(): Promise<void> {
+	await new Promise<void>((resolve, reject) => {
+		const child = spawn('bunx', ['--bun', 'prisma', 'generate'], {
+			cwd: process.cwd(),
+			env: {
+				...process.env,
+				DATABASE_URL: getDatabaseUrl()
+			},
+			stdio: ['ignore', 'pipe', 'pipe']
+		});
+
+		let stderr = '';
+
+		child.stderr.on('data', (chunk: Buffer) => {
+			stderr += chunk.toString();
+		});
+
+		child.on('error', (error) => {
+			reject(new Error(`Failed to run prisma generate: ${error.message}`));
+		});
+
+		child.on('close', (code) => {
+			if (code !== 0) {
+				reject(new Error(stderr.trim() || `prisma generate failed with exit code ${code}`));
+				return;
+			}
+			resolve();
+		});
+	});
 }

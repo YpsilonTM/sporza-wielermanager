@@ -9,6 +9,7 @@ import { canAutoRefreshAuth } from './auth.js';
 import { enrichStageForUi } from './overview-enrichment';
 import { buildOverviewUi, mapLineupView, mapRosterView } from './overview-ui';
 import { getUpcomingMatch } from './format';
+import { mapMiniCompetitions } from './mini-competitions';
 import { getOverviewCache, setOverviewCache } from './app-state';
 import { pinoLogger } from './logger';
 import type { OverviewData } from '$lib/types/overview';
@@ -107,7 +108,9 @@ export async function fetchOverviewData(): Promise<OverviewData> {
 		upcomingLineup: mappedLineup,
 		rosterPreview: mapRosterView(roster),
 		transferState,
-		ranking
+		ranking,
+		miniCompetitions: mapMiniCompetitions(overview.miniCompetitions),
+		editionSlug: settings.editionSlug
 	};
 
 	const auth = {

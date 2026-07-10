@@ -58,6 +58,24 @@ export interface RankingView {
 	lastMatchName: string | null;
 }
 
+export interface MiniCompetitionStandingView {
+	rank: number;
+	points: number;
+	teamName: string;
+	userName?: string;
+	isMyTeam: boolean;
+}
+
+export interface MiniCompetitionView {
+	slug: string;
+	name: string;
+	owner: boolean;
+	memberCount: number | null;
+	myRank: number | null;
+	myPoints: number | null;
+	standings: MiniCompetitionStandingView[];
+}
+
 export type OverviewPhase =
 	| 'build_squad'
 	| 'pre_race'
@@ -98,6 +116,8 @@ export interface OverviewData {
 	rosterPreview: RosterRiderView[];
 	transferState: TransferStateView | null;
 	ranking: RankingView | null;
+	miniCompetitions: MiniCompetitionView[];
+	editionSlug: string;
 	auth: AuthStatusView;
 	ui: OverviewUiState;
 }
