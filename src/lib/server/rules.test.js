@@ -157,11 +157,11 @@ describe('getFreeTransfers', () => {
 	});
 
 	test('does not treat summary.freeTransfers as total allowance', () => {
-		expect(getFreeTransfers({}, { freeTransfers: 3 })).toBe(4);
+		expect(getFreeTransfers({}, { freeTransfers: 2 })).toBe(3);
 	});
 
-	test('defaults to 4 free transfers', () => {
-		expect(getFreeTransfers({})).toBe(4);
+	test('defaults to 3 free transfers', () => {
+		expect(getFreeTransfers({})).toBe(3);
 	});
 });
 

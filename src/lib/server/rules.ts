@@ -41,9 +41,10 @@ type TransferSummary = {
 
 export const RULES = {
 	squadSize: 16,
-	lineupSize: 12,
+	lineupSize: 16,
+	substituteSlots: 4,
 	budgetMillion: 100,
-	freeTransfersBeforeCost: 4,
+	freeTransfersBeforeCost: 3,
 	transferCostIncreasePerTransfer: 1
 } as const;
 
@@ -52,7 +53,7 @@ export function getLineupSize(gameRules: GameRules | null | undefined): number {
 }
 
 export function getSubstituteSlots(gameRules: GameRules | null | undefined): number {
-	return gameRules?.lineup?.substituteSlots ?? 0;
+	return gameRules?.lineup?.substituteSlots ?? RULES.substituteSlots;
 }
 
 export function getStarterCount(gameRules: GameRules | null | undefined): number {

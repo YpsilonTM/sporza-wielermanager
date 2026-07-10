@@ -73,7 +73,7 @@ export function calculateNextTransferCost(usedTransfers, gameRules) {
     return 0;
   }
 
-  // Transfer 4 = 1M, 5 = 2M, 6 = 3M, ...
+  // After free allowance: transfer 4 = 1M, 5 = 2M, 6 = 3M, ...
   return usedTransfers - freeTransfers + 1;
 }
 
