@@ -19,6 +19,7 @@ export interface ManagePreviewView {
 	proposedLineup: import('./overview').LineupView;
 	changes: LineupChangeView[];
 	transfer: TransferPreviewView | null;
+	source?: string | null;
 }
 
 export interface RosterPreviewView {

@@ -9,6 +9,10 @@ interface RawMatch {
 	deadline?: string;
 	startTime?: string;
 	stageProfileUrl?: string;
+	distance?: number;
+	matchNumber?: number;
+	startLocation?: string;
+	finishLocation?: string;
 }
 
 export function enrichStageForUi(match: RawMatch | null | undefined, rosterSize: number): EnrichedStage | null {
@@ -31,6 +35,10 @@ export function enrichStageForUi(match: RawMatch | null | undefined, rosterSize:
 		deadline: match.deadline,
 		startTime: match.startTime,
 		stageProfileUrl: match.stageProfileUrl,
+		distance: match.distance,
+		matchNumber: match.matchNumber,
+		startLocation: match.startLocation,
+		finishLocation: match.finishLocation,
 		minutesUntilDeadline: Math.max(0, Math.floor(msUntil / 60_000)),
 		autoManageScheduled: inAutoWindow,
 		autoManageAt,

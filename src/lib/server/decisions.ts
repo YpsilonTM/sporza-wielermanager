@@ -1,6 +1,7 @@
 import { prisma } from './db';
 import type { ManagePreviewView, RosterPreviewView } from '$lib/types/preview';
 import type { ManagerDecisionView } from '$lib/types/decisions';
+import { mapPostMortem } from './post-mortem';
 
 /** True when a submitted lineup decision exists for this match (survives restarts). */
 export async function wasMatchLineupSubmitted(matchId: number): Promise<boolean> {
@@ -44,6 +45,9 @@ export function mapDecisionToView(decision: {
 	confidence: number | null;
 	reasoning: string;
 	previewJson: string;
+	matchScore?: number | null;
+	postMortemJson?: string | null;
+	decisionSource?: string | null;
 	submitted: boolean;
 	submittedAt: Date;
 }): ManagerDecisionView {
@@ -56,6 +60,9 @@ export function mapDecisionToView(decision: {
 		confidence: decision.confidence,
 		reasoning: decision.reasoning,
 		preview: parseDecisionPreview(decision.decisionType, decision.previewJson),
+		matchScore: decision.matchScore ?? null,
+		postMortem: mapPostMortem(decision.postMortemJson),
+		decisionSource: decision.decisionSource ?? null,
 		submitted: decision.submitted,
 		submittedAt: decision.submittedAt.toISOString()
 	};

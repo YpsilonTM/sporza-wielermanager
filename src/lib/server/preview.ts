@@ -101,12 +101,17 @@ export function buildTransferPreview(
 }
 
 export function buildManagePreview(result: {
-	decision: { lineup?: Array<{ cyclistId: number; lineupType: string }>; transfers?: Array<{ ridersIn?: number[]; ridersOut?: number[]; reasoning?: string }> };
+	decision: {
+		lineup?: Array<{ cyclistId: number; lineupType: string }>;
+		transfers?: Array<{ ridersIn?: number[]; ridersOut?: number[]; reasoning?: string }>;
+		source?: string;
+	};
 	context: { roster?: Array<Record<string, unknown>>; allCyclists?: Array<{ id: number; firstName?: string; lastName?: string }> };
 	transferResult?: { valid?: boolean; transferCost?: number } | null;
 	currentLineup?: { riders?: Array<Record<string, unknown>> } | null;
 	submitted?: boolean;
 	allowTransfers?: boolean;
+	decisionSource?: string;
 }): ManagePreviewView {
 	const roster = result.context.roster ?? [];
 	const proposedLineup = lineupFromDecision(result.decision.lineup ?? [], roster);
@@ -118,7 +123,8 @@ export function buildManagePreview(result: {
 		currentLineup,
 		proposedLineup,
 		changes: computeLineupChanges(currentLineup, proposedLineup),
-		transfer: buildTransferPreview(transfer, result.transferResult ?? null, result.context.allCyclists ?? [], executed)
+		transfer: buildTransferPreview(transfer, result.transferResult ?? null, result.context.allCyclists ?? [], executed),
+		source: result.decisionSource ?? result.decision.source ?? null
 	};
 }
 

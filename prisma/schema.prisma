@@ -15,18 +15,21 @@ model AuthCache {
 }
 
 model ManagerDecision {
-  id           Int      @id @default(autoincrement())
-  matchId      Int?
-  matchName    String?
-  decisionType String
-  summary      String   @default("")
-  confidence   Float?
-  reasoning    String   @default("")
-  previewJson  String   @default("")
-  submitted    Boolean  @default(false)
-  submittedAt  DateTime @default(now())
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id             Int      @id @default(autoincrement())
+  matchId        Int?
+  matchName      String?
+  decisionType   String
+  summary        String   @default("")
+  confidence     Float?
+  reasoning      String   @default("")
+  previewJson    String   @default("")
+  matchScore     Int?
+  postMortemJson String   @default("")
+  decisionSource String?
+  submitted      Boolean  @default(false)
+  submittedAt    DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   @@index([matchId])
   @@index([submittedAt])

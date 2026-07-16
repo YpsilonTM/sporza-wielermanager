@@ -1,5 +1,10 @@
 import { predictLineupDecision, predictRosterDecision } from "./predictor.js";
-import { normalizeLineup, splitLineupByRole, formatLineupRoleLabel } from "./lineup.js";
+import {
+  normalizeLineup,
+  splitLineupByRole,
+  formatLineupRoleLabel,
+  buildBaselineLineup
+} from "./lineup.js";
 import {
   validateLineup,
   validateRosterIds,
@@ -22,6 +27,7 @@ import {
 import { buildFallbackRoster } from "./roster-fallback.js";
 import { formatRiderName } from "./format.js";
 import { getUpcomingMatch } from "./format.js";
+import { fetchRecentPostMortems } from "./post-mortem.js";
 
 function resolveCookiesAccessor({ cookies, getCookies }) {
   if (typeof getCookies === "function") {
@@ -325,7 +331,10 @@ export async function runManager({
     currentLineup = null;
   }
 
-  const decision = await predictLineupDecision(
+  const baselineLineup = buildBaselineLineup(context.roster, context.match, context.gameRules);
+  const postMortems = await fetchRecentPostMortems(3);
+
+  let decision = await predictLineupDecision(
     apiKey,
     {
       match: context.match,
@@ -334,17 +343,38 @@ export async function runManager({
       gameRules: context.gameRules,
       transfersAllowed: areTransfersOpen(context.gameStatus, context.overview?.edition),
       preRaceSquadWindow,
-      minutesUntilDeadline: minutesUntilMatch(context.match)
+      minutesUntilDeadline: minutesUntilMatch(context.match),
+      editionName: context.editionName,
+      baselineLineup,
+      postMortems
     },
     { onDebug: (msg) => onLog(msg, "debug") }
   );
 
+  let decisionSource = "ai";
+
   if (!decision) {
-    throw new Error("AI returned no decision");
+    onLog("AI gaf geen decision — baseline lineup wordt gebruikt.", "warn");
+    decision = {
+      lineup: baselineLineup,
+      confidence: "medium",
+      summary: "Deterministische baseline (AI unavailable).",
+      transfers: []
+    };
+    decisionSource = "baseline";
+  } else if (decision.confidence === "low") {
+    onLog("AI confidence low — baseline lineup wordt gebruikt.", "warn");
+    decision = {
+      ...decision,
+      lineup: baselineLineup,
+      summary: `${decision.summary || "Lage AI-confidence"} → baseline toegepast.`,
+      confidence: "medium"
+    };
+    decisionSource = "baseline";
   }
 
   onLog(`AI summary: ${decision.summary}`);
-  onLog(`Confidence: ${decision.confidence}${decision.escalated ? " (escalated)" : ""}`);
+  onLog(`Confidence: ${decision.confidence}${decision.escalated ? " (escalated)" : ""} · source=${decisionSource}`);
 
   const transferState = await api.fetchTransferState(activeCookies());
   const freeRemaining = getFreeTransfersRemaining(transferState, context.gameRules);
@@ -423,12 +453,25 @@ export async function runManager({
     onLog(
       `Lineup genormaliseerd naar ${getStarterCount(context.gameRules)} starters + ${getSubstituteSlots(context.gameRules)} bank.`
     );
+    if (decisionSource === "ai") {
+      decisionSource = "hybrid";
+    }
   }
 
-  const lineupValidation = validateLineup(decision.lineup, rosterForLineup, context.gameRules);
+  let lineupValidation = validateLineup(decision.lineup, rosterForLineup, context.gameRules);
+  if (!lineupValidation.valid) {
+    onLog(`AI lineup ongeldig (${lineupValidation.errors.join("; ")}) — baseline.`, "warn");
+    decision.lineup = buildBaselineLineup(rosterForLineup, context.match, context.gameRules);
+    decision.summary = `${decision.summary || "Ongeldige AI-lineup"} → baseline toegepast.`;
+    decisionSource = "baseline";
+    lineupValidation = validateLineup(decision.lineup, rosterForLineup, context.gameRules);
+  }
+
   if (!lineupValidation.valid) {
     throw new Error(`Invalid lineup: ${lineupValidation.errors.join("; ")}`);
   }
+
+  decision.source = decisionSource;
 
   const { starters, bench } = splitLineupByRole(decision.lineup);
   onLog(`Starters (${starters.length}):`);
@@ -456,7 +499,8 @@ export async function runManager({
     lineupPayload,
     transferResult,
     currentLineup,
-    submitted: submit
+    submitted: submit,
+    decisionSource
   };
 }
 

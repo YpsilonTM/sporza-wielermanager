@@ -6,6 +6,10 @@ export interface EnrichedStage {
 	deadline?: string;
 	startTime?: string;
 	stageProfileUrl?: string;
+	distance?: number;
+	matchNumber?: number;
+	startLocation?: string;
+	finishLocation?: string;
 	minutesUntilDeadline: number;
 	autoManageScheduled: boolean;
 	autoManageAt?: string;
@@ -116,6 +120,7 @@ export interface OverviewData {
 	rosterPreview: RosterRiderView[];
 	transferState: TransferStateView | null;
 	ranking: RankingView | null;
+	lastPostMortem: import('./decisions').PostMortemView | null;
 	miniCompetitions: MiniCompetitionView[];
 	editionSlug: string;
 	auth: AuthStatusView;

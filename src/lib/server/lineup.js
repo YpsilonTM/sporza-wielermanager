@@ -50,6 +50,63 @@ export function scoreLineupSuitability(cyclist, match) {
   return score;
 }
 
+/**
+ * Deterministic lineup from roster suitability ranking.
+ * Captain = highest suitability; next starters fill; remainder on bench.
+ */
+export function buildBaselineLineup(roster, match, gameRules) {
+  const lineupSize = getLineupSize(gameRules);
+  const starterTarget = getStarterCount(gameRules);
+  const riders = [...(roster || [])];
+
+  if (riders.length !== lineupSize || starterTarget <= 0) {
+    return riders.map((cyclist, index) => ({
+      cyclistId: cyclist.id,
+      lineupType: index === 0 ? "CAPTAIN" : index < starterTarget ? "NORMAL" : "SUBSTITUTE",
+      reasoning: "Baseline fallback"
+    }));
+  }
+
+  const ranked = riders
+    .map((cyclist) => ({
+      cyclist,
+      suitability: scoreLineupSuitability(cyclist, match)
+    }))
+    .sort((a, b) => b.suitability - a.suitability);
+
+  const captain = ranked[0];
+  const rest = ranked.slice(1);
+  const starterOthers = rest.slice(0, Math.max(0, starterTarget - 1));
+  const bench = rest.slice(Math.max(0, starterTarget - 1));
+
+  return [
+    {
+      cyclistId: captain.cyclist.id,
+      lineupType: "CAPTAIN",
+      reasoning: `Baseline kapitein (suitability ${captain.suitability})`
+    },
+    ...starterOthers.map((entry) => ({
+      cyclistId: entry.cyclist.id,
+      lineupType: "NORMAL",
+      reasoning: `Baseline starter (suitability ${entry.suitability})`
+    })),
+    ...bench.map((entry) => ({
+      cyclistId: entry.cyclist.id,
+      lineupType: "SUBSTITUTE",
+      reasoning: `Baseline bank (suitability ${entry.suitability})`
+    }))
+  ];
+}
+
+export function compactBaselineForPrompt(baselineLineup, roster) {
+  const byId = new Map((roster || []).map((cyclist) => [cyclist.id, cyclist]));
+  return (baselineLineup || []).map((entry) => ({
+    cyclistId: entry.cyclistId,
+    lineupType: entry.lineupType,
+    name: formatRiderName(byId.get(entry.cyclistId))
+  }));
+}
+
 export function normalizeLineup(lineup, { gameRules, roster, match }) {
   const lineupSize = getLineupSize(gameRules);
   const starterTarget = getStarterCount(gameRules);

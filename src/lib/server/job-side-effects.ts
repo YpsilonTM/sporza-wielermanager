@@ -56,6 +56,7 @@ export async function persistDecision(entry: {
 	confidence?: number | string;
 	reasoning?: string;
 	previewJson?: string;
+	decisionSource?: string | null;
 	submitted: boolean;
 }): Promise<void> {
 	await prisma.managerDecision.create({
@@ -67,6 +68,7 @@ export async function persistDecision(entry: {
 			confidence: normalizeConfidence(entry.confidence),
 			reasoning: entry.reasoning || '',
 			previewJson: entry.previewJson || '',
+			decisionSource: entry.decisionSource ?? null,
 			submitted: entry.submitted
 		}
 	});

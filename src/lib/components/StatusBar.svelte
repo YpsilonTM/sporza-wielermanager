@@ -77,6 +77,11 @@
 				{#if ranking.lastMatchName}
 					<p class="meta-text">{ranking.lastMatchName}</p>
 				{/if}
+				{#if overview.lastPostMortem?.summary}
+					<p class="line-clamp-2 meta-text" title={overview.lastPostMortem.summary}>
+						{overview.lastPostMortem.summary}
+					</p>
+				{/if}
 			</div>
 		{/if}
 	</div>

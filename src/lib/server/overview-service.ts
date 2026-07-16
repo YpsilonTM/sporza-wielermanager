@@ -12,6 +12,7 @@ import { getUpcomingMatch } from './format';
 import { mapMiniCompetitions } from './mini-competitions';
 import { getOverviewCache, setOverviewCache } from './app-state';
 import { pinoLogger } from './logger';
+import { ensurePostMortemsForLastMatch } from './post-mortem';
 import type { OverviewData } from '$lib/types/overview';
 
 const OVERVIEW_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -53,7 +54,11 @@ export async function fetchOverviewData(): Promise<OverviewData> {
 					terrainType: match.terrainType,
 					deadline: match.deadline,
 					startTime: match.startTime,
-					stageProfileUrl: match.stageProfileUrl
+					stageProfileUrl: match.stageProfileUrl,
+					distance: match.distance,
+					matchNumber: match.matchNumber,
+					startLocation: match.startLocation,
+					finishLocation: match.finishLocation
 				},
 				roster.length
 			)
@@ -100,6 +105,22 @@ export async function fetchOverviewData(): Promise<OverviewData> {
 			}
 		: null;
 
+	let lastPostMortem = null;
+	if (lastMatch?.match?.id != null && lastMatch.matchScore != null) {
+		try {
+			lastPostMortem = await ensurePostMortemsForLastMatch({
+				matchId: Number(lastMatch.match.id),
+				matchName: lastMatch.match?.name ?? null,
+				matchScore: lastMatch.matchScore,
+				matchScores: rawRanking?.matchScores ?? null
+			});
+		} catch (error) {
+			pinoLogger.warn(
+				`Post-mortem update failed: ${error instanceof Error ? error.message : String(error)}`
+			);
+		}
+	}
+
 	const base: Omit<OverviewData, 'ui' | 'auth'> = {
 		edition: overview.edition,
 		gameStatus: overview.gameStatus,
@@ -109,6 +130,7 @@ export async function fetchOverviewData(): Promise<OverviewData> {
 		rosterPreview: mapRosterView(roster),
 		transferState,
 		ranking,
+		lastPostMortem,
 		miniCompetitions: mapMiniCompetitions(overview.miniCompetitions),
 		editionSlug: settings.editionSlug
 	};

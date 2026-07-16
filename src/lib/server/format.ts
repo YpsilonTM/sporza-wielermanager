@@ -13,6 +13,9 @@ type UpcomingMatch = {
 	deadline?: string;
 	startTime?: string;
 	stageProfileUrl?: string;
+	distance?: number;
+	startLocation?: string;
+	finishLocation?: string;
 };
 
 /** True when lineup can still be submitted for this stage. */

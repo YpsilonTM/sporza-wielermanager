@@ -66,6 +66,15 @@ export async function runAutoManage(): Promise<void> {
 
 		if (!overview.gameStatus?.roster?.length) {
 			pinoLogger.debug('Roster still empty after build attempt — skipping auto-manage.');
+			await notifyWebhook({
+				event: 'auto-manage-skip',
+				title: 'Auto-manage overgeslagen',
+				message: 'Ploeg nog leeg na build-poging.',
+				autoManaged: true,
+				matchId: match.id,
+				matchName: match.name,
+				reason: 'empty-roster'
+			});
 			return;
 		}
 
@@ -100,6 +109,7 @@ export async function runAutoManage(): Promise<void> {
 			allowTransfers: process.env.ALLOW_AUTO_TRANSFERS === 'true',
 			submitted: true
 		});
+		const source = result.decisionSource ?? result.decision?.source ?? 'ai';
 
 		await emitJobResult({
 			persist: {
@@ -110,6 +120,7 @@ export async function runAutoManage(): Promise<void> {
 				confidence: result.decision.confidence,
 				reasoning,
 				previewJson: JSON.stringify(preview),
+				decisionSource: source,
 				submitted: true
 			},
 			sse: {
@@ -130,7 +141,9 @@ export async function runAutoManage(): Promise<void> {
 				submitted: true,
 				matchId: match.id,
 				matchName: match.name,
-				autoManaged: true
+				autoManaged: true,
+				confidence: result.decision.confidence,
+				source
 			}
 		});
 
@@ -142,7 +155,8 @@ export async function runAutoManage(): Promise<void> {
 			event: 'auto-manage-failed',
 			title: 'Auto-manage mislukt',
 			message,
-			autoManaged: true
+			autoManaged: true,
+			reason: message
 		});
 	} finally {
 		setManageRunning(false);
@@ -193,6 +207,7 @@ export async function runManageJob(options: {
 			submitted: result.submitted
 		});
 		const reasoning = formatDecisionReasoning(result.decision, result.context.allCyclists);
+		const source = result.decisionSource ?? result.decision?.source ?? 'ai';
 
 		await emitJobResult({
 			persist: {
@@ -203,6 +218,7 @@ export async function runManageJob(options: {
 				confidence: result.decision.confidence,
 				reasoning,
 				previewJson: JSON.stringify(preview),
+				decisionSource: source,
 				submitted: result.submitted
 			},
 			sse: {
@@ -223,7 +239,9 @@ export async function runManageJob(options: {
 				message: result.decision.summary,
 				submitted: result.submitted,
 				matchId: match.id,
-				matchName: match.name
+				matchName: match.name,
+				confidence: result.decision.confidence,
+				source
 			}
 		});
 

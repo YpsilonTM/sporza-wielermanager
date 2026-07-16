@@ -48,11 +48,20 @@
 			.filter(Boolean);
 	}
 
+	function decisionSourceLabel(source: string): string {
+		if (source === 'ai') return 'AI';
+		if (source === 'baseline') return 'baseline';
+		if (source === 'hybrid') return 'hybrid';
+		return source;
+	}
+
 	function hasDetails(decision: ManagerDecisionView): boolean {
 		return Boolean(
 			decision.summary ||
 				decision.reasoning ||
-				decision.preview
+				decision.preview ||
+				decision.postMortem ||
+				decision.matchScore != null
 		);
 	}
 
@@ -128,6 +137,18 @@
 												{:else}
 													<span class="badge-warn">simulatie</span>
 												{/if}
+												{#if decision.decisionSource}
+													<span class="chip bg-zinc-800 text-zinc-400 ring-1 ring-zinc-700">
+														{decisionSourceLabel(decision.decisionSource)}
+													</span>
+												{/if}
+												{#if decision.matchScore != null}
+													<span
+														class="chip bg-emerald-950/40 text-emerald-400 ring-1 ring-emerald-900/50"
+													>
+														+{decision.matchScore} pt
+													</span>
+												{/if}
 												<span class="chip bg-zinc-800 text-zinc-300 ring-1 ring-zinc-700">
 													{confidenceDisplayLabel(decision.confidence)}
 												</span>
@@ -144,6 +165,28 @@
 							</summary>
 
 							<div class="space-y-4 border-t border-zinc-800/80 px-3 pb-3 pt-3">
+								{#if decision.postMortem}
+									<div>
+										<p class="label-caps mb-1">Rit terugblik</p>
+										<p class="whitespace-pre-wrap text-sm text-zinc-300">
+											{decision.postMortem.summary}
+										</p>
+										{#if decision.postMortem.captainName || decision.postMortem.recentAverage != null}
+											<p class="mt-1 meta-text">
+												{#if decision.postMortem.captainName}
+													Kapitein: {decision.postMortem.captainName}
+												{/if}
+												{#if decision.postMortem.captainName && decision.postMortem.recentAverage != null}
+													·
+												{/if}
+												{#if decision.postMortem.recentAverage != null}
+													Recent gem.: {Math.round(decision.postMortem.recentAverage)}
+												{/if}
+											</p>
+										{/if}
+									</div>
+								{/if}
+
 								{#if decision.summary}
 									<div>
 										<p class="label-caps mb-1">Samenvatting</p>

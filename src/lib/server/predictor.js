@@ -12,6 +12,9 @@ import {
   getMinimumAthletePrice,
   getFreeTransfers
 } from "./rules.js";
+import { formatScoringRulesForPrompt } from "./scoring-rules.js";
+import { scoreLineupSuitability, compactBaselineForPrompt } from "./lineup.js";
+import { formatPostMortemsForPrompt } from "./post-mortem.js";
 
 const REPAIR_MODEL = "gemini-3.1-flash-lite";
 
@@ -137,6 +140,32 @@ function compactCyclist(cyclist) {
   };
 }
 
+/** Riders not in roster who are scoring well — candidates for form-based transfers. */
+export function pickHotTransferTargets(allCyclists, roster, match, limit = 25) {
+  const rosterIds = new Set((roster || []).map((c) => c.id));
+  const rosterPoints = (roster || []).map((c) => Number(c.totalBasePoints) || 0);
+  const rosterMedian =
+    rosterPoints.length > 0
+      ? [...rosterPoints].sort((a, b) => a - b)[Math.floor(rosterPoints.length / 2)]
+      : 0;
+
+  return (allCyclists || [])
+    .filter(
+      (c) =>
+        c.participating !== false &&
+        !rosterIds.has(c.id) &&
+        (Number(c.totalBasePoints) || 0) > 0
+    )
+    .sort((a, b) => {
+      const pointsDiff = (Number(b.totalBasePoints) || 0) - (Number(a.totalBasePoints) || 0);
+      if (pointsDiff !== 0) return pointsDiff;
+      return scoreLineupSuitability(b, match) - scoreLineupSuitability(a, match);
+    })
+    .filter((c) => (Number(c.totalBasePoints) || 0) >= Math.max(rosterMedian * 0.8, 20))
+    .slice(0, limit)
+    .map(compactCyclist);
+}
+
 function buildRosterPrompt(context) {
   const { editionName, allCyclists, gameRules, todayStr, currentRoster, match, minutesUntilDeadline } =
     context;
@@ -231,20 +260,28 @@ function buildPrompt(context) {
     todayStr,
     transfersAllowed,
     preRaceSquadWindow,
-    minutesUntilDeadline
+    minutesUntilDeadline,
+    editionName,
+    baselineLineup,
+    postMortems
   } = context;
   const lineupSize = getLineupSize(gameRules);
   const starterCount = getStarterCount(gameRules);
   const substituteSlots = getSubstituteSlots(gameRules);
   const squadSize = getSquadSize(gameRules);
-  const budgetLimit = getBudgetLimit(gameRules);
 
   const rosterCompact = (roster || []).map(compactCyclist);
   const available = (allCyclists || [])
     .filter((c) => c.participating !== false)
-    .sort((a, b) => (b.totalBasePoints ?? 0) - (a.totalBasePoints ?? 0))
+    .sort(
+      (a, b) =>
+        scoreLineupSuitability(b, match) - scoreLineupSuitability(a, match)
+    )
     .slice(0, 80)
     .map(compactCyclist);
+  const hotTargets = transfersAllowed
+    ? pickHotTransferTargets(allCyclists, roster, match, 25)
+    : [];
 
   const benchRule =
     substituteSlots > 0
@@ -253,9 +290,13 @@ function buildPrompt(context) {
       : `- Exact ${lineupSize} renners in lineup met 1 CAPTAIN`;
 
   const transferRule = transfersAllowed
-    ? `Optioneel: stel maximaal 1 transfer voor bij bevestigde blessure/uitval (zelfde aantal renners in/uit).
+    ? `Optioneel: stel maximaal 1 transfer voor (zelfde aantal renners in/uit).
 - Transfers 1-${getFreeTransfers(gameRules)} gratis, daarna +1M kost per transfer (afgetrokken van budget)
-- Stel GEEN transfer voor tenzij een renner uit je ploeg bevestigd niet start`
+- Prioriteit 1 — MUST: bevestigde blessure/DNS/uitval in MIJN PLOEG → transfer die renner eruit
+- Prioriteit 2 — MAY: een renner BUITEN mijn ploeg scoort duidelijk beter (hoge totalBasePoints / recente vorm / trui) dan mijn zwakste of minst passende renner → transfer voorstel
+- Alleen vorm-transfer als het verschil groot is (niet voor marginale upgrades) en budget/teamlimiet klopt
+- Gebruik Google Search voor recente etappeuitslagen en wie in vorm is
+- Geen transfer? Laat transfers weglaten of leeg.`
     : preRaceSquadWindow
       ? `Transfers via transfer-API zijn gesloten, maar vóór rit 1 is de ploeg al herzien op gezondheid.
 Stel GEEN transfers voor in JSON — focus op lineup. Zieke/gekwetste renners die nog in de ploeg zitten: NOOIT starter of kapitein.`
@@ -264,26 +305,44 @@ Stel GEEN transfers voor in JSON — focus op lineup. Zieke/gekwetste renners di
   const deadlineNote =
     minutesUntilDeadline != null ? `\nDeadline over ~${minutesUntilDeadline} minuten.` : "";
 
+  const baselineBlock =
+    Array.isArray(baselineLineup) && baselineLineup.length
+      ? `
+VOORGESTELDE BASELINE (deterministisch op ritgeschiktheid):
+${JSON.stringify(compactBaselineForPrompt(baselineLineup, roster), null, 2)}
+Wijk alleen af met duidelijke reden (vorm, gezondheid, trui, etappefavoriet). Kapitein = beste top-6 EV die gezond is — niet automatisch de sterkste GC-renner.
+`
+      : "";
+
+  const postMortemBlock = formatPostMortemsForPrompt(postMortems || [], roster);
+  const editionLabel = editionName || "Sporza Wielermanager";
+
   return `
-Je bent een expert fantasy wielermanager voor Sporza Wielermanager (Tour de France 2026).
+Je bent een expert fantasy wielermanager voor ${editionLabel}.
 VANDAAG: ${todayStr} (Europe/Brussels).${deadlineNote}
 
 Doel: kies de beste lineup van ${lineupSize} renners uit mijn vaste ploeg (${squadSize} renners) voor de komende rit.
 ${transferRule}
 
+${formatScoringRulesForPrompt(match?.matchType)}
+${postMortemBlock ? `\n${postMortemBlock}\n` : ""}
 GEZONDHEID (KRITISCH — altijd eerst checken via Google Search):
 - Zoek actueel nieuws per renner: blessures, maag-/maag-darmproblemen, ziekte, vermoeidheid, DNS-risico
 - Renners met gezondheidsproblemen: NOOIT CAPTAIN, NOOIT starter — alleen SUBSTITUTE (bank) als ze nog in de ploeg zitten
 - Bij twijfel over fitness: bank, niet starten
-- Kapitein = renner met hoogste verwachte punten die GEZOND is en past bij het ritprofiel
+- Zoek wie geel/groen/bolletjes/wit draagt en start hen indien gezond (trui-bonussen)
+- Kapitein = renner met hoogste verwachte punten + kapitein-bonus (top 6) die GEZOND is en past bij het ritprofiel
 
 RIT:
 - id: ${match.id}
 - naam: ${match.name}
+- nummer: ${match.matchNumber ?? "?"}
 - type: ${match.matchType ?? "GENERAL"}
 - terrein: ${match.terrainType ?? "UNKNOWN"}
+- afstand: ${match.distance != null ? `${match.distance} km` : "?"}
 - deadline: ${match.deadline ?? match.startTime}
 - route: ${match.startLocation ?? "?"} → ${match.finishLocation ?? "?"}
+- profiel: ${match.stageProfileUrl ?? "n.v.t."}
 
 REGELS:
 - Exact ${lineupSize} renners in lineup (iedereen uit mijn ploeg moet voorkomen)
@@ -291,13 +350,19 @@ ${benchRule}
 - CAPTAIN moet een starter zijn, nooit op de bank
 - Kies starters op basis van ritprofiel (TTT/ITT/bergen/vlak); zet minder geschikte renners op de bank
 - Alleen renners uit MIJN ROSTER in lineup${transfersAllowed ? " (tenzij je transfer voorstelt)" : ""}
-
-Gebruik Google Search voor recente vorm, blessures, gezondheidsupdates en etappeverwachting vandaag.
+${baselineBlock}
+Gebruik Google Search voor recente vorm, blessures, gezondheidsupdates, truiendragers en etappeverwachting vandaag.
 
 MIJN ROSTER:
 ${JSON.stringify(rosterCompact, null, 2)}
 
-TOP BESCHIKBARE RENNERS (referentie${transfersAllowed ? " voor transfers" : ""}):
+${
+  hotTargets.length
+    ? `HOT TRANSFER TARGETS (niet in mijn ploeg, hoog scorend — overweeg als upgrade):
+${JSON.stringify(hotTargets, null, 2)}
+`
+    : ""
+}TOP BESCHIKBARE RENNERS (referentie${transfersAllowed ? " voor transfers — gesorteerd op ritgeschiktheid" : ""}):
 ${JSON.stringify(available.slice(0, 40), null, 2)}
 
 Return ALLEEN JSON met: lineup (cyclistId, lineupType, reasoning), transfers (optioneel), confidence (high/medium/low), summary.
